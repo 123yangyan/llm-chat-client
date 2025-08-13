@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Chat</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <!-- 新建聊天按钮 -->
+            <button class="new-chat-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 4V20M4 12H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                新建聊天
+            </button>
+
+            <!-- 模型选择 -->
+            <div class="model-selector">
+                <label>选择模型</label>
+                <select id="model-select">
+                    <option value="">加载中...</option>
+                </select>
+            </div>
+
+            <!-- 历史记录 -->
+            <div class="chat-history">
+                <div class="history-title">聊天记录</div>
+                <div class="history-list" id="history-list">
+                    <!-- 历史记录项会通过JavaScript动态添加 -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- 主聊天区域 -->
+        <main class="chat-container">
+            <!-- 聊天消息区域 -->
+            <div class="messages" id="messages">
+                <!-- 欢迎消息 -->
+                <div class="message assistant">
+                    <div class="message-content">
+                        <p>你好！我是AI助手。你可以：</p>
+                        <ul>
+                            <li>选择不同的模型进行对话</li>
+                            <li>创建新的对话</li>
+                            <li>查看历史对话记录</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 输入区域 -->
+            <div class="input-container">
+                <div class="input-box">
+                    <textarea 
+                        id="user-input" 
+                        placeholder="输入消息..." 
+                        rows="1"
+                        autofocus
+                    ></textarea>
+                    <button class="send-btn" id="send-btn">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="input-footer">
+                    <span class="disclaimer">AI可能会产生错误信息。请仔细考虑建议和事实。</span>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html> 

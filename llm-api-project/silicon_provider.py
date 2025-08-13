@@ -6,9 +6,12 @@ from llm_interface import LLMInterface
 class SiliconProvider(LLMInterface):
     def __init__(self):
         self.api_key = os.getenv("SILICON_API_KEY")
+        print(f"初始化硅基流动提供商...")
+        print(f"API密钥状态: {'已设置' if self.api_key else '未设置'}")
         if not self.api_key:
             raise ValueError("请在.env文件中设置SILICON_API_KEY")
         self.setup_client()
+        print("硅基流动提供商初始化完成")
     
     def setup_client(self):
         """设置API客户端"""
