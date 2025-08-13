@@ -1,8 +1,10 @@
 from dotenv import load_dotenv
 from silicon_provider import SiliconProvider
 from google_provider import GoogleProvider
-from typing import Dict, Optional
+from typing import Dict, Optional, Union, Generator
 import json
+import asyncio
+from fastapi import WebSocket
 
 # 加载环境变量
 load_dotenv()
@@ -37,8 +39,37 @@ class LLMManager:
             return {}
         return self.current_provider.get_available_models()
     
+    async def chat_stream(self, messages: list, model: Optional[str] = None, temperature: float = 0.7) -> Generator[str, None, None]:
+        """流式聊天请求"""
+        if not self.current_provider:
+            yield json.dumps({
+                "error": "no_provider",
+                "message": "未初始化任何提供商"
+            })
+            return
+
+        try:
+            async for chunk in self.current_provider.chat_completion_stream(
+                messages=messages,
+                model=model or self.current_model,
+                temperature=temperature
+            ):
+                yield chunk
+
+        except Exception as e:
+            yield json.dumps({
+                "status": "error",
+                "error": "api_error",
+                "message": str(e),
+                "request": {
+                    "messages": messages,
+                    "model": model or self.current_model,
+                    "temperature": temperature
+                }
+            })
+
     def chat(self, messages: list, model: Optional[str] = None, temperature: float = 0.7) -> dict:
-        """发送聊天请求并返回原始响应"""
+        """发送聊天请求并返回完整响应"""
         if not self.current_provider:
             return {
                 "error": "no_provider",
@@ -49,7 +80,8 @@ class LLMManager:
             response = self.current_provider.chat_completion(
                 messages=messages,
                 model=model or self.current_model,
-                temperature=temperature
+                temperature=temperature,
+                stream=True  # 默认使用流式输出
             )
             
             return {
@@ -73,6 +105,18 @@ class LLMManager:
                     "temperature": temperature
                 }
             }
+
+async def handle_websocket_chat(websocket: WebSocket, manager: LLMManager, messages: list):
+    """处理WebSocket连接的流式聊天"""
+    try:
+        async for chunk in manager.chat_stream(messages):
+            await websocket.send_text(chunk)
+    except Exception as e:
+        await websocket.send_json({
+            "status": "error",
+            "error": "stream_error",
+            "message": str(e)
+        })
 
 def main():
     manager = LLMManager()
@@ -108,7 +152,7 @@ def main():
                     
                 elif command == '切换':
                     current = 'silicon' if isinstance(manager.current_provider, GoogleProvider) else 'google'
-                    if manager.initialize_provider(current): # Changed from switch_provider to initialize_provider
+                    if manager.initialize_provider(current):
                         print(json.dumps({
                             "status": "provider_switched",
                             "provider": current,
