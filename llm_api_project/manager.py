@@ -30,6 +30,11 @@ class LLMManager:
                     self.providers[provider_name] = self.mcp_client.create_provider("google")
                 self.current_provider = self.providers[provider_name]
                 return True
+            elif provider_name == "wisdom_gate":
+                if provider_name not in self.providers:
+                    self.providers[provider_name] = self.mcp_client.create_provider("wisdom_gate")
+                self.current_provider = self.providers[provider_name]
+                return True
             else:
                 print(f"错误：不支持的提供商 {provider_name}")
                 return False

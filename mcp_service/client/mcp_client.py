@@ -71,6 +71,13 @@ class MCPClient:
 
             return GoogleProvider()
 
+        elif provider_name == "wisdom_gate":
+            try:
+                from llm_api_project.wisdom_gate_provider import WisdomGateProvider
+            except Exception as e:
+                raise MCPClientError(f"导入 WisdomGateProvider 失败: {e}")
+            return WisdomGateProvider()
+
         raise MCPClientError(f"不支持的 provider: {provider_name}")
 
     def get_available_models(self, provider) -> Dict[str, str]:

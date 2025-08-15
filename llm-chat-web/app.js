@@ -560,6 +560,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 preferredModelId = 'gemini-2.5-flash';
             } else if (provider === 'silicon') {
                 preferredModelId = 'Qwen/Qwen3-32B';
+            } else if (provider === 'wisdom_gate') {
+                preferredModelId = 'gemini-2.5-flash';
             }
 
             if (preferredModelId) {
