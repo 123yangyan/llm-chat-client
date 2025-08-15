@@ -16,6 +16,7 @@ from docx.oxml.ns import qn
 import pdfkit
 import tempfile
 from datetime import datetime
+from llm_api_project import config
 
 # 查找并加载.env文件
 env_path = find_dotenv()
@@ -66,37 +67,123 @@ class ChatResponse(BaseModel):
 class ProviderSwitchRequest(BaseModel):
     provider_name: str
 
+class ModelSwitchRequest(BaseModel):
+    model: str
+
 @app.post("/api/provider/switch")
 async def switch_provider(request: ProviderSwitchRequest):
     """切换LLM提供商"""
+    print("\n=== 切换供应商请求 ===")
+    print(f"当前供应商: {llm_manager.current_provider.__class__.__name__ if llm_manager.current_provider else 'None'}")
+    print(f"目标供应商: {request.provider_name}")
+    
     success = llm_manager.initialize_provider(request.provider_name)
+    
     if success:
+        models = llm_manager.get_available_models()
+        print("\n=== 切换成功 ===")
+        print(f"新供应商: {request.provider_name}")
+        print(f"默认模型: {llm_manager.current_model}")
+        print(f"可用模型列表: {models}")
+        print("================\n")
         return {
             "status": "switched",
             "current_provider": request.provider_name,
-            "models": llm_manager.get_available_models()
+            "current_model": llm_manager.current_model,
+            "models": models
         }
     else:
+        print(f"\n=== 切换失败 ===")
+        print(f"无法初始化供应商: {request.provider_name}")
+        print("================\n")
         raise HTTPException(status_code=400, detail=f"无法切换到提供商: {request.provider_name}")
+
+@app.post("/api/models/switch")
+async def switch_model(request: ModelSwitchRequest):
+    """切换当前使用的模型"""
+    try:
+        print("\n=== 模型切换请求 ===")
+        print(f"当前模型: {llm_manager.current_model}")
+        print(f"目标模型: {request.model}")
+
+        # 验证模型是否存在
+        available_models = llm_manager.get_available_models()
+        if request.model not in available_models.values():
+            print("\n=== 切换失败 ===")
+            print(f"错误: 模型 {request.model} 不存在")
+            print("可用模型列表:")
+            for name, model_id in available_models.items():
+                print(f"- {name}: {model_id}")
+            print("================\n")
+            raise HTTPException(
+                status_code=400,
+                detail=f"模型 {request.model} 不存在"
+            )
+
+        # 更新当前模型
+        old_model = llm_manager.current_model
+        llm_manager.current_model = request.model
+
+        print("\n=== 切换成功 ===")
+        print(f"从 {old_model} 切换到 {request.model}")
+        print("================\n")
+
+        return {
+            "status": "success",
+            "previous_model": old_model,
+            "current_model": request.model,
+            "message": "模型切换成功"
+        }
+
+    except Exception as e:
+        print("\n=== 切换失败 ===")
+        print(f"错误信息: {str(e)}")
+        print("================\n")
+        raise HTTPException(
+            status_code=500,
+            detail=f"模型切换失败: {str(e)}"
+        )
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     """处理聊天请求"""
     try:
-        print(f"收到聊天请求: {request}")
+        # 检查模型切换
+        if request.model != llm_manager.current_model:
+            print("\n=== 模型切换 ===")
+            print(f"从 {llm_manager.current_model} 切换到 {request.model}")
+            llm_manager.current_model = request.model
+            print("================\n")
+
+        # 复制一份消息，避免修改原始数据
+        messages = list(request.messages)
+        # 如果第一个消息不是 system，则插入
+        if not messages or messages[0].get("role") != "system":
+            system_prompt = config.ACTIVE_SYSTEM_PROMPT
+            if system_prompt:
+                messages.insert(0, {"role": "system", "content": system_prompt})
+
+        print("=== 向大模型发送的原始请求 ===")
+        print(f"当前模型: {request.model}")
+        print("消息内容:")
+        for msg in messages:
+            print(f"- [{msg['role']}]: {msg['content']}")
+        print("==========================")
+
         result = llm_manager.chat(
-            messages=request.messages,
+            messages=messages,
             model=request.model
         )
-        print(f"LLM返回结果: {result}")
-        
+
+        print("=== 大模型返回的原始响应 ===")
+        print(result)
+        print("==========================")
+
         if isinstance(result, dict) and result.get("status") == "success":
             return ChatResponse(response=result["response"])
         elif isinstance(result, dict) and "error" in result:
-            print(f"LLM返回错误: {result}")
             return JSONResponse(status_code=500, content=result)
         else:
-            print(f"未知的响应格式: {result}")
             return JSONResponse(
                 status_code=500,
                 content={"status": "error", "error": "未知的响应格式"}
@@ -115,9 +202,25 @@ async def chat(request: ChatRequest):
 async def get_models():
     """获取可用模型列表"""
     try:
+        print("\n=== 获取模型列表 ===")
+        print(f"当前供应商: {llm_manager.current_provider.__class__.__name__ if llm_manager.current_provider else 'None'}")
+        print(f"当前模型: {llm_manager.current_model}")
+        
         models = llm_manager.get_available_models()
-        return {"models": models}
+        print(f"可用模型数量: {len(models)}")
+        print(f"模型列表: {models}")
+        print("==================\n")
+        
+        return {
+            "status": "success",
+            "current_provider": llm_manager.current_provider.__class__.__name__ if llm_manager.current_provider else None,
+            "current_model": llm_manager.current_model,
+            "models": models
+        }
     except Exception as e:
+        print("\n=== 获取模型列表失败 ===")
+        print(f"错误信息: {str(e)}")
+        print("=====================\n")
         return JSONResponse(
             status_code=500,
             content={"status": "error", "error": str(e)}

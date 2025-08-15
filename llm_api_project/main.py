@@ -1,6 +1,5 @@
 from dotenv import load_dotenv
 from silicon_provider import SiliconProvider
-from google_provider import GoogleProvider
 from typing import Dict, Optional, Union, Generator
 import json
 import asyncio
@@ -12,8 +11,7 @@ load_dotenv()
 class LLMManager:
     def __init__(self):
         self.providers: Dict[str, type] = {
-            'silicon': SiliconProvider,
-            'google': GoogleProvider
+            'silicon': SiliconProvider
         }
         self.current_provider = None
         self.current_model = None
@@ -124,12 +122,11 @@ def main():
     
     # 初始化提供商
     if not manager.initialize_provider('silicon'):
-        if not manager.initialize_provider('google'):
-            print(json.dumps({
-                "error": "init_failed",
-                "message": "无法初始化任何API提供商"
-            }))
-            return
+        print(json.dumps({
+            "error": "init_failed",
+            "message": "无法初始化任何API提供商"
+        }))
+        return
 
     # 输出初始状态
     print(json.dumps({
@@ -151,7 +148,7 @@ def main():
                     break
                     
                 elif command == '切换':
-                    current = 'silicon' if isinstance(manager.current_provider, GoogleProvider) else 'google'
+                    current = 'silicon'
                     if manager.initialize_provider(current):
                         print(json.dumps({
                             "status": "provider_switched",

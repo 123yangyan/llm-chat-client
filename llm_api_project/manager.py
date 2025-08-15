@@ -1,64 +1,74 @@
 import os
-from typing import List, Dict, Optional, Union
+from typing import Dict, Optional, Union, Generator, List
 from dotenv import load_dotenv
 from .silicon_provider import SiliconProvider
+import json
+
+# 加载环境变量
+load_dotenv()
 
 class LLMManager:
     def __init__(self):
-        """初始化LLM管理器"""
+        self.providers: Dict[str, type] = {
+            'silicon': SiliconProvider
+        }
         self.current_provider = None
-        self.providers = {}
-        print("初始化LLM管理器...")
+        self.current_model = None
 
     def initialize_provider(self, provider_name: str) -> bool:
-        """初始化指定的LLM提供商"""
         try:
-            if provider_name == "silicon":
-                if provider_name not in self.providers:
-                    self.providers[provider_name] = SiliconProvider()
-                self.current_provider = self.providers[provider_name]
-                return True
-            else:
-                print(f"错误：不支持的提供商 {provider_name}")
+            print(f"尝试初始化提供商: {provider_name}")
+            provider_class = self.providers.get(provider_name)
+            if not provider_class:
+                print(f"提供商 {provider_name} 不存在")
                 return False
+            self.current_provider = provider_class()
+            self.current_model = self.current_provider.default_model
+            print(f"成功初始化提供商: {provider_name}")
+            return True
         except Exception as e:
-            print(f"初始化提供商失败: {str(e)}")
+            print(json.dumps({
+                "error": "provider_init_failed",
+                "message": str(e)
+            }))
             return False
 
     def get_available_models(self) -> Dict[str, str]:
-        """获取当前提供商可用的模型列表"""
-        try:
-            if not self.current_provider:
-                print("错误：未初始化提供商")
-                return {}
-            return self.current_provider.get_available_models()
-        except Exception as e:
-            print(f"获取模型列表失败: {str(e)}")
+        if not self.current_provider:
             return {}
+        return self.current_provider.get_available_models()
 
-    def chat(self, messages: List[Dict[str, str]], model: str) -> Dict[str, Union[str, List[Dict[str, str]]]]:
-        """处理聊天请求"""
+    def chat(self, messages: list, model: Optional[str] = None, temperature: float = 0.7) -> dict:
+        if not self.current_provider:
+            return {
+                "error": "no_provider",
+                "message": "未初始化任何提供商"
+            }
         try:
-            if not self.current_provider:
-                return {"status": "error", "error": "未初始化提供商"}
-
-            if not model:
-                model = self.current_provider.default_model
-                print(f"未指定模型，使用默认模型: {model}")
-
             response = self.current_provider.chat_completion(
                 messages=messages,
-                model=model,
-                stream=False  # 暂时不使用流式响应
+                model=model or self.current_model,
+                temperature=temperature,
+                stream=True  # 默认使用流式输出
             )
-            
             return {
                 "status": "success",
-                "response": response,
-                "messages": messages
+                "provider": self.current_provider.__class__.__name__,
+                "model": model or self.current_model,
+                "request": {
+                    "messages": messages,
+                    "temperature": temperature
+                },
+                "response": response
             }
-
         except Exception as e:
-            error_msg = str(e)
-            print(f"聊天请求失败: {error_msg}")
-            return {"status": "error", "error": error_msg} 
+            return {
+                "status": "error",
+                "error": "api_error",
+                "message": str(e),
+                "request": {
+                    "messages": messages,
+                    "model": model or self.current_model,
+                    "temperature": temperature
+                }
+            } 

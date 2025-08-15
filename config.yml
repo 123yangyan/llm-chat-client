@@ -1,0 +1,26 @@
+server:
+  host: "0.0.0.0"
+  port: 8000
+
+# 大模型（LLM）相关配置
+llm:
+  default_provider: "silicon"
+  providers:
+    silicon:
+      model: "llama3"
+      temperature: 0.8
+      stream: false
+      system_prompt: "You are a local AI model."
+
+# MCP (工具/服务) 相关配置
+mcp:
+  enabled: true
+  timeout_seconds: 30
+  server:
+    type: stdio
+    command: uv
+    args:
+      - --directory
+      - D:\OneDrive\Desktop\api网页\llm_api_project\mcp\mcp_server
+      - run
+      - main.py

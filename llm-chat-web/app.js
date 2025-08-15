@@ -242,31 +242,39 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 清空现有选项
             modelSelect.innerHTML = '<option value="">请选择模型...</option>';
             
-            // 获取并过滤模型（排除Pro模型）
+            // 如果返回了当前供应商和当前模型信息，显示在界面上
+            if (data.current_provider) {
+                console.log(`当前供应商: ${data.current_provider}`);
+                console.log(`当前模型: ${data.current_model}`);
+                appendMessage('assistant', `当前使用的供应商: ${data.current_provider}\n当前选择的模型: ${data.current_model}`);
+            }
+            
+            // 获取模型列表
             const models = data.models || {};
-            const filteredModels = Object.entries(models)
-                .filter(([name, id]) => {
-                    // 排除包含 "Pro" 或 "pro" 的模型
-                    return !id.includes('Pro/') && 
-                           !id.toLowerCase().includes('/pro/') && 
-                           !id.toLowerCase().includes('pro-');
-                })
+            const sortedModels = Object.entries(models)
                 .sort((a, b) => a[0].localeCompare(b[0]));
 
             // 添加所有模型选项
-            filteredModels.forEach(([displayName, modelId]) => {
+            sortedModels.forEach(([displayName, modelId]) => {
                 const option = document.createElement('option');
                 option.value = modelId;
                 option.textContent = displayName;
                 modelSelect.appendChild(option);
             });
 
-            // 如果没有模型，显示提示
-            if (filteredModels.length === 0) {
-                modelSelect.innerHTML = '<option value="">暂无可用模型</option>';
-                appendMessage('assistant', '⚠️ 未找到可用模型，请检查API密钥是否正确设置');
+            // 如果有当前模型，则选中它
+            if (data.current_model && models[data.current_model]) {
+                modelSelect.value = data.current_model;
             } else {
-                console.log(`加载了 ${filteredModels.length} 个免费模型`);
+                modelSelect.selectedIndex = 1; // 选择第一个可用模型
+            }
+
+            // 如果没有模型，显示提示
+            if (sortedModels.length === 0) {
+                modelSelect.innerHTML = '<option value="">暂无可用模型</option>';
+                appendMessage('assistant', '⚠️ 未找到可用模型，请检查配置是否正确');
+            } else {
+                console.log(`加载了 ${sortedModels.length} 个模型`);
             }
 
         } catch (error) {
@@ -277,6 +285,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             modelSelect.disabled = false;
         }
     }
+
+    // 移除模型选择记忆事件
+    // modelSelect.addEventListener('change', function() {
+    //     localStorage.setItem('lastUsedModel', modelSelect.value);
+    // });
 
     // 自动调整文本框高度
     function adjustTextareaHeight() {
@@ -519,6 +532,113 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateHistoryList();
     });
 
+    // 监听供应商切换事件
+    providerSelect.addEventListener('change', async function() {
+        const provider = providerSelect.value;
+        try {
+            // 显示切换状态
+            appendMessage('assistant', `正在切换到供应商: ${provider}...`);
+            modelSelect.innerHTML = '<option value="">正在切换供应商...</option>';
+            modelSelect.disabled = true;
+
+            // 发送切换请求
+            const response = await fetch('/api/provider/switch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ provider_name: provider })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '切换供应商失败');
+            }
+
+            const data = await response.json();
+            console.log('供应商切换响应:', data);
+
+            // 显示切换成功消息
+            appendMessage('assistant', `✅ 供应商切换成功!\n当前供应商: ${data.current_provider}\n当前模型: ${data.current_model}`);
+
+            // 更新模型列表
+            modelSelect.innerHTML = '<option value="">请选择模型...</option>';
+            const models = data.models || {};
+
+            // 按名称排序并添加模型选项
+            const sortedModels = Object.entries(models)
+                .sort((a, b) => a[0].localeCompare(b[0]));
+
+            sortedModels.forEach(([displayName, modelId]) => {
+                const option = document.createElement('option');
+                option.value = modelId;
+                option.textContent = displayName;
+                modelSelect.appendChild(option);
+            });
+
+            // 选择当前模型或第一个可用模型
+            if (data.current_model && models[data.current_model]) {
+                modelSelect.value = data.current_model;
+            } else if (sortedModels.length > 0) {
+                modelSelect.selectedIndex = 1;
+            }
+
+            // 如果没有模型，显示提示
+            if (sortedModels.length === 0) {
+                modelSelect.innerHTML = '<option value="">暂无可用模型</option>';
+                appendMessage('assistant', '⚠️ 未找到可用模型，请检查配置是否正确');
+            }
+
+        } catch (error) {
+            console.error('切换供应商失败:', error);
+            appendMessage('assistant', `❌ 切换供应商失败: ${error.message}`);
+            modelSelect.innerHTML = '<option value="">切换失败，请重试</option>';
+        } finally {
+            modelSelect.disabled = false;
+        }
+    });
+
+    // 监听模型选择变化
+    modelSelect.addEventListener('change', async function() {
+        const selectedModel = modelSelect.value;
+        if (!selectedModel) return;
+
+        try {
+            console.log('切换到模型:', selectedModel);
+            
+            // 立即发送模型切换请求
+            const response = await fetch('/api/models/switch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: selectedModel
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '模型切换失败');
+            }
+
+            const data = await response.json();
+            console.log('模型切换响应:', data);
+            appendMessage('assistant', `✅ 已切换到模型: ${selectedModel}`);
+
+        } catch (error) {
+            console.error('切换模型失败:', error);
+            appendMessage('assistant', `❌ 切换模型失败: ${error.message}`);
+            // 恢复之前的选择
+            if (modelSelect.dataset.lastValue) {
+                modelSelect.value = modelSelect.dataset.lastValue;
+            }
+        }
+
+        // 保存当前选择
+        modelSelect.dataset.lastValue = selectedModel;
+    });
+
     // 初始化
     async function initialize() {
         if (await checkAPIServer()) {
@@ -534,8 +654,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
             `;
         }
-        // 加载历史记录列表
+        // 只加载历史记录列表，不自动加载聊天内容
         updateHistoryList();
+        // 输出当前模型选择框的值，便于调试
+        console.log('初始化后模型选择框的值:', modelSelect.value);
     }
 
     initialize();
