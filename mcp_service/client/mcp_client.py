@@ -45,6 +45,72 @@ class MCPClient:
         self._streams_context = None
         self._session_context = None
 
+    # ------------------ 适配 LLMManager 所需的同步便捷方法 ------------------
+
+    def create_provider(self, provider_name: str):
+        """根据名称创建并返回 LLM Provider 实例
+
+        目前仅支持 "silicon"，后续可在此扩展更多 provider。
+        """
+        provider_name = provider_name.lower()
+        if provider_name == "silicon":
+            # 延迟导入，避免循环依赖
+            try:
+                from llm_api_project.silicon_provider import SiliconProvider
+            except Exception as e:
+                raise MCPClientError(f"导入 SiliconProvider 失败: {e}")
+
+            return SiliconProvider()
+
+        raise MCPClientError(f"不支持的 provider: {provider_name}")
+
+    def get_available_models(self, provider) -> Dict[str, str]:
+        """返回指定 provider 支持的模型列表"""
+        if not provider:
+            raise MCPClientError("Provider 为空")
+
+        if hasattr(provider, "get_available_models"):
+            return provider.get_available_models()
+
+        raise MCPClientError("Provider 未实现 get_available_models 方法")
+
+    def chat(
+        self,
+        provider,
+        messages,
+        model: str,
+        stream: bool = False,
+        **kwargs,
+    ):
+        """使用指定 provider 进行聊天
+
+        Args:
+            provider: LLM Provider 实例
+            messages (List[Dict]): 对话消息
+            model (str): 模型名称
+            stream (bool): 是否流式
+        """
+        if not provider:
+            raise MCPClientError("Provider 为空")
+
+        # 优先检查同步接口 chat_completion，再检查异步接口
+        if hasattr(provider, "chat_completion"):
+            return provider.chat_completion(messages=messages, model=model, stream=stream, **kwargs)
+
+        if hasattr(provider, "chat_completion_stream"):
+            # 如果只提供了异步流式接口，则需要运行异步循环获取完整内容
+            import asyncio
+
+            async def _collect():
+                content = ""
+                async for chunk in provider.chat_completion_stream(messages=messages, model=model):
+                    content += chunk
+                return content
+
+            return asyncio.run(_collect())
+
+        raise MCPClientError("Provider 未实现聊天接口")
+
     async def connect(self) -> None:
         """
         连接到MCP服务器

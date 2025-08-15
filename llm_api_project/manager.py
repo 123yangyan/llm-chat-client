@@ -1,6 +1,10 @@
 import os
 from typing import List, Dict, Optional, Union
 from dotenv import load_dotenv
+
+# 导入MCP客户端及配置
+from mcp_service.client import MCPClient  # noqa: F401
+from mcp_service.config.settings import MCPSettings
 from .silicon_provider import SiliconProvider
 
 class LLMManager:
@@ -8,6 +12,8 @@ class LLMManager:
         """初始化LLM管理器"""
         self.current_provider = None
         self.providers = {}
+        # 使用配置中的 URL 初始化 MCP 客户端
+        self.mcp_client = MCPClient(MCPSettings.HOSTED_URL)
         print("初始化LLM管理器...")
 
     def initialize_provider(self, provider_name: str) -> bool:
@@ -15,7 +21,8 @@ class LLMManager:
         try:
             if provider_name == "silicon":
                 if provider_name not in self.providers:
-                    self.providers[provider_name] = SiliconProvider()
+                    # 使用MCP客户端创建提供商实例
+                    self.providers[provider_name] = self.mcp_client.create_provider("silicon")
                 self.current_provider = self.providers[provider_name]
                 return True
             else:
@@ -31,7 +38,8 @@ class LLMManager:
             if not self.current_provider:
                 print("错误：未初始化提供商")
                 return {}
-            return self.current_provider.get_available_models()
+            # 通过MCP客户端获取模型列表
+            return self.mcp_client.get_available_models(self.current_provider)
         except Exception as e:
             print(f"获取模型列表失败: {str(e)}")
             return {}
@@ -46,7 +54,9 @@ class LLMManager:
                 model = self.current_provider.default_model
                 print(f"未指定模型，使用默认模型: {model}")
 
-            response = self.current_provider.chat_completion(
+            # 使用MCP客户端发送聊天请求
+            response = self.mcp_client.chat(
+                provider=self.current_provider,
                 messages=messages,
                 model=model,
                 stream=False  # 暂时不使用流式响应

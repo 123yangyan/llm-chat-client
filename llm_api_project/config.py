@@ -2,6 +2,7 @@ import os
 import yaml
 from dotenv import load_dotenv
 from datetime import date
+from typing import Dict, Any
 
 # 获取项目根目录
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -54,3 +55,35 @@ ACTIVE_MODEL = ACTIVE_LLM_CONFIG.get('model')
 ACTIVE_TEMPERATURE = ACTIVE_LLM_CONFIG.get('temperature', 0.7)
 ACTIVE_STREAM = ACTIVE_LLM_CONFIG.get('stream', True)
 ACTIVE_SYSTEM_PROMPT = ACTIVE_LLM_CONFIG.get('system_prompt', '') 
+
+class Config:
+    # MCP服务配置
+    MCP_SERVICE_HOST = os.getenv("MCP_SERVICE_HOST", "localhost")
+    MCP_SERVICE_PORT = int(os.getenv("MCP_SERVICE_PORT", "50051"))
+    
+    # 模型提供商配置
+    DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "silicon")
+    
+    # 导出功能配置
+    EXPORT_FORMATS = ["pdf", "word"]
+    WKHTMLTOPDF_PATH = os.getenv("WKHTMLTOPDF_PATH")
+    
+    # Web服务器配置
+    HOST = os.getenv("HOST", "0.0.0.0")
+    PORT = int(os.getenv("PORT", "8000"))
+    
+    @staticmethod
+    def get_mcp_config() -> Dict[str, Any]:
+        """获取MCP服务配置"""
+        return {
+            "host": Config.MCP_SERVICE_HOST,
+            "port": Config.MCP_SERVICE_PORT,
+        }
+    
+    @staticmethod
+    def get_export_config() -> Dict[str, Any]:
+        """获取导出功能配置"""
+        return {
+            "formats": Config.EXPORT_FORMATS,
+            "wkhtmltopdf_path": Config.WKHTMLTOPDF_PATH,
+        } 
