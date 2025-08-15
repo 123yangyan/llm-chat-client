@@ -5,6 +5,7 @@ from typing import Dict, Optional, Union, Generator
 import json
 import asyncio
 from fastapi import WebSocket
+import time
 
 # 加载环境变量
 load_dotenv()
@@ -77,6 +78,16 @@ class LLMManager:
             }
         
         try:
+            # 打印原始请求数据
+            print(json.dumps({
+                "type": "request",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "provider": self.current_provider.__class__.__name__,
+                "model": model or self.current_model,
+                "temperature": temperature,
+                "messages": messages
+            }, ensure_ascii=False, indent=2))
+            
             response = self.current_provider.chat_completion(
                 messages=messages,
                 model=model or self.current_model,
@@ -84,18 +95,23 @@ class LLMManager:
                 stream=True  # 默认使用流式输出
             )
             
-            return {
+            # 打印原始响应数据
+            result = {
+                "type": "response",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "status": "success",
                 "provider": self.current_provider.__class__.__name__,
                 "model": model or self.current_model,
-                "request": {
-                    "messages": messages,
-                    "temperature": temperature
-                },
                 "response": response
             }
+            print("\n" + json.dumps(result, ensure_ascii=False, indent=2))
+            
+            return result
+            
         except Exception as e:
-            return {
+            error_result = {
+                "type": "error",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "status": "error",
                 "error": "api_error",
                 "message": str(e),
@@ -105,6 +121,8 @@ class LLMManager:
                     "temperature": temperature
                 }
             }
+            print("\n" + json.dumps(error_result, ensure_ascii=False, indent=2))
+            return error_result
 
 async def handle_websocket_chat(websocket: WebSocket, manager: LLMManager, messages: list):
     """处理WebSocket连接的流式聊天"""
@@ -126,18 +144,22 @@ def main():
     if not manager.initialize_provider('silicon'):
         if not manager.initialize_provider('google'):
             print(json.dumps({
+                "type": "system",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "error": "init_failed",
                 "message": "无法初始化任何API提供商"
-            }))
+            }, ensure_ascii=False, indent=2))
             return
 
     # 输出初始状态
     print(json.dumps({
+        "type": "system",
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "status": "ready",
         "provider": manager.current_provider.__class__.__name__,
         "model": manager.current_model,
         "available_models": manager.get_available_models()
-    }))
+    }, ensure_ascii=False, indent=2))
     
     while True:
         try:
@@ -154,37 +176,44 @@ def main():
                     current = 'silicon' if isinstance(manager.current_provider, GoogleProvider) else 'google'
                     if manager.initialize_provider(current):
                         print(json.dumps({
+                            "type": "system",
+                            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                             "status": "provider_switched",
                             "provider": current,
                             "model": manager.current_model
-                        }))
+                        }, ensure_ascii=False, indent=2))
                     continue
                     
                 elif command == '模型':
                     print(json.dumps({
+                        "type": "system",
+                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                         "status": "models_list",
                         "models": manager.get_available_models()
-                    }))
+                    }, ensure_ascii=False, indent=2))
                     continue
                     
                 elif command == '清空':
                     messages = []
                     print(json.dumps({
+                        "type": "system",
+                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                         "status": "history_cleared"
-                    }))
+                    }, ensure_ascii=False, indent=2))
                     continue
                     
                 else:
                     print(json.dumps({
+                        "type": "system",
+                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                         "error": "unknown_command",
                         "command": command
-                    }))
+                    }, ensure_ascii=False, indent=2))
                     continue
             
             # 处理聊天消息
             messages.append({"role": "user", "content": user_input})
             result = manager.chat(messages)
-            print(json.dumps(result))
             
             if result["status"] == "success":
                 messages.append({"role": "assistant", "content": result["response"]})
@@ -194,15 +223,19 @@ def main():
             
         except Exception as e:
             print(json.dumps({
+                "type": "system",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "error": "runtime_error",
                 "message": str(e)
-            }))
+            }, ensure_ascii=False, indent=2))
 
 if __name__ == "__main__":
     try:
         main()
     except Exception as e:
         print(json.dumps({
+            "type": "system",
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "error": "fatal_error",
             "message": str(e)
-        })) 
+        }, ensure_ascii=False, indent=2)) 

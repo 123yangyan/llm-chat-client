@@ -1,0 +1,26 @@
+# 应用服务配置
+server:
+  host: "0.0.0.0"
+  port: 8000
+
+# 大模型（LLM）相关配置
+llm:
+  # 当前使用的provider
+  default_provider: "silicon"  # 设置为silicon
+
+  # 不同provider的具体配置
+  providers:
+    silicon:
+      model: "Qwen/Qwen3-14B"
+      temperature: 0.7
+      stream: false
+      system_prompt: |
+        你是一个专业的AI助手。
+        请根据用户的提问，清晰、准确地回答问题。
+        如果需要调用工具，请优先使用工具。
+        今天是 {current_date}。
+
+# MCP (工具/服务) 相关配置
+mcp:
+  enabled: true  # 一个总开关，方便一键启用/禁用所有工具
+  timeout_seconds: 30 # 调用工具的全局超时时间 

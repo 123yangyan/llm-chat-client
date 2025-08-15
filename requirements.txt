@@ -4,4 +4,5 @@ python-dotenv
 openai
 requests
 python-docx
-pdfkit 
+pdfkit
+pyyaml>=6.0.1 

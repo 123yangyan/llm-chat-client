@@ -2,19 +2,32 @@ from openai import OpenAI
 import os
 from typing import Dict, List, Optional, Generator, AsyncGenerator
 from .llm_interface import LLMInterface
+from . import config  # 导入配置模块
 import requests
 import json
 import asyncio
+import time
 
 class SiliconProvider(LLMInterface):
     def __init__(self):
         self.api_key = os.getenv("SILICON_API_KEY")
-        print(f"初始化硅基流动提供商...")
-        print(f"API密钥状态: {'已设置' if self.api_key else '未设置'}")
+        print(json.dumps({
+            "type": "system",
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "event": "provider_init",
+            "provider": "silicon",
+            "api_key_status": "已设置" if self.api_key else "未设置"
+        }, ensure_ascii=False, indent=2))
+        
         if not self.api_key:
             raise ValueError("请在.env文件中设置SILICON_API_KEY")
         self.setup_client()
-        print("硅基流动提供商初始化完成")
+        print(json.dumps({
+            "type": "system",
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "event": "provider_ready",
+            "provider": "silicon"
+        }, ensure_ascii=False, indent=2))
     
     def setup_client(self):
         """设置API客户端"""
@@ -112,6 +125,17 @@ class SiliconProvider(LLMInterface):
         
         return name_mapping.get(name, name)
 
+    def _add_system_prompt(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """添加系统提示词到消息列表开头"""
+        if not messages or messages[0].get('role') != 'system':
+            system_prompt = config.ACTIVE_SYSTEM_PROMPT
+            if system_prompt:
+                messages.insert(0, {
+                    "role": "system",
+                    "content": system_prompt
+                })
+        return messages
+
     async def chat_completion_stream(
         self, 
         messages: List[Dict[str, str]], 
@@ -120,7 +144,19 @@ class SiliconProvider(LLMInterface):
     ) -> AsyncGenerator[str, None]:
         """异步流式聊天请求"""
         try:
-            print(f"使用模型 {model} 发送流式请求...")
+            # 添加系统提示词
+            messages = self._add_system_prompt(messages)
+            
+            print(json.dumps({
+                "type": "request",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "stream_request",
+                "provider": "silicon",
+                "model": model,
+                "temperature": temperature,
+                "messages": messages
+            }, ensure_ascii=False, indent=2))
+
             response = await self.client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -135,25 +171,37 @@ class SiliconProvider(LLMInterface):
                     current_content += content
                     # 发送当前累积的内容
                     yield json.dumps({
+                        "type": "stream_chunk",
+                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                         "status": "streaming",
                         "content": content,
                         "full_content": current_content
-                    })
+                    }, ensure_ascii=False)
             
             # 发送完成信号
             yield json.dumps({
+                "type": "stream_complete",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "status": "complete",
                 "content": current_content
-            })
+            }, ensure_ascii=False)
 
         except Exception as e:
             error_msg = str(e)
-            print(f"流式API调用失败: {error_msg}")
-            yield json.dumps({
+            print(json.dumps({
+                "type": "error",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "status": "error",
                 "error": "stream_error",
                 "message": error_msg
-            })
+            }, ensure_ascii=False, indent=2))
+            yield json.dumps({
+                "type": "error",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "status": "error",
+                "error": "stream_error",
+                "message": error_msg
+            }, ensure_ascii=False)
 
     def chat_completion(
         self, 
@@ -164,7 +212,20 @@ class SiliconProvider(LLMInterface):
     ) -> str:
         """发送聊天请求并获取响应"""
         try:
-            print(f"使用模型 {model} 发送请求...")
+            # 添加系统提示词
+            messages = self._add_system_prompt(messages)
+            
+            print(json.dumps({
+                "type": "request",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "chat_request",
+                "provider": "silicon",
+                "model": model,
+                "temperature": temperature,
+                "stream": stream,
+                "messages": messages
+            }, ensure_ascii=False, indent=2))
+
             response = self.client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -175,18 +236,47 @@ class SiliconProvider(LLMInterface):
             if stream:
                 # 处理流式响应
                 full_response = ""
-                print("\nAI: ", end="")
+                print(json.dumps({
+                    "type": "response",
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "event": "stream_start",
+                    "provider": "silicon"
+                }, ensure_ascii=False, indent=2))
+                
                 for chunk in response:
                     if chunk.choices[0].delta.content:
                         content = chunk.choices[0].delta.content
-                        print(content, end="", flush=True)
                         full_response += content
+                        print(content, end="", flush=True)
+                
+                print(json.dumps({
+                    "type": "response",
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "event": "stream_complete",
+                    "provider": "silicon",
+                    "content_length": len(full_response)
+                }, ensure_ascii=False, indent=2))
+                
                 return full_response
             else:
                 # 处理非流式响应
-                return response.choices[0].message.content
+                content = response.choices[0].message.content
+                print(json.dumps({
+                    "type": "response",
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "event": "chat_response",
+                    "provider": "silicon",
+                    "content_length": len(content)
+                }, ensure_ascii=False, indent=2))
+                return content
                 
         except Exception as e:
             error_msg = str(e)
-            print(f"API调用失败: {error_msg}")
+            print(json.dumps({
+                "type": "error",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "chat_error",
+                "provider": "silicon",
+                "error": error_msg
+            }, ensure_ascii=False, indent=2))
             raise Exception(f"硅基流动API调用失败: {error_msg}") 
