@@ -91,7 +91,6 @@ class SiliconProvider(LLMInterface):
                 print("未找到可用模型，使用默认模型列表")
                 return self._get_default_models()
 
-            print(f"获取到的模型列表: {available_models}")
             return available_models
 
         except Exception as e:

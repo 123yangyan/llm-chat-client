@@ -496,6 +496,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 事件监听器
     sendButton.addEventListener('click', sendMessage);
+    providerSelect.addEventListener('change', handleProviderChange);
     
     // 新建聊天按钮事件
     newChatButton.addEventListener('click', () => {
@@ -519,10 +520,84 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateHistoryList();
     });
 
+    /**
+     * 切换LLM供应商并刷新模型列表
+     */
+    async function switchProvider(provider) {
+        try {
+            // 显示加载状态
+            modelSelect.innerHTML = '<option value="">加载中...</option>';
+            modelSelect.disabled = true;
+
+            const resp = await fetch('/api/provider/switch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ provider_name: provider })
+            });
+
+            if (!resp.ok) {
+                const errData = await resp.json();
+                throw new Error(errData.detail || '切换供应商失败');
+            }
+
+            const data = await resp.json();
+            const models = data.models || {};
+
+            // 渲染模型下拉框
+            modelSelect.innerHTML = '<option value="">请选择模型...</option>';
+            Object.entries(models).forEach(([displayName, modelId]) => {
+                const opt = document.createElement('option');
+                opt.value = modelId;
+                opt.textContent = displayName;
+                modelSelect.appendChild(opt);
+            });
+
+            // 根据供应商设置首选默认模型
+            let preferredModelId = null;
+            if (provider === 'google') {
+                preferredModelId = 'gemini-2.5-flash';
+            } else if (provider === 'silicon') {
+                preferredModelId = 'Qwen/Qwen3-32B';
+            }
+
+            if (preferredModelId) {
+                // 如果列表中存在首选模型，则选中
+                const found = Array.from(modelSelect.options).find(opt => opt.value === preferredModelId);
+                if (found) {
+                    modelSelect.value = preferredModelId;
+                } else {
+                    // 若找不到，保持“请选择模型...”
+                    modelSelect.selectedIndex = 0;
+                }
+            }
+
+            if (Object.keys(models).length === 0) {
+                modelSelect.innerHTML = '<option value="">暂无可用模型</option>';
+                appendMessage('assistant', '⚠️ 未找到可用模型，请检查API密钥是否正确设置');
+            }
+
+            console.log(`切换到供应商 ${provider}，加载 ${Object.keys(models).length} 个模型`);
+
+        } catch (error) {
+            console.error('切换供应商失败:', error);
+            appendMessage('assistant', `⚠️ 切换供应商失败: ${error.message}`);
+        } finally {
+            modelSelect.disabled = false;
+        }
+    }
+
+    // 处理供应商变更事件
+    async function handleProviderChange() {
+        const provider = providerSelect.value;
+        await switchProvider(provider);
+    }
+
     // 初始化
     async function initialize() {
         if (await checkAPIServer()) {
-            await loadAvailableModels();
+            await switchProvider(providerSelect.value);
         }
         // 设置初始欢迎消息
         if (messagesContainer.children.length === 0) {

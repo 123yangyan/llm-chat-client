@@ -50,7 +50,7 @@ class MCPClient:
     def create_provider(self, provider_name: str):
         """根据名称创建并返回 LLM Provider 实例
 
-        目前仅支持 "silicon"，后续可在此扩展更多 provider。
+        目前支持 "silicon" 和 "google"。
         """
         provider_name = provider_name.lower()
         if provider_name == "silicon":
@@ -61,6 +61,15 @@ class MCPClient:
                 raise MCPClientError(f"导入 SiliconProvider 失败: {e}")
 
             return SiliconProvider()
+
+        elif provider_name == "google":
+            # 延迟导入，避免循环依赖
+            try:
+                from llm_api_project.google_provider import GoogleProvider
+            except Exception as e:
+                raise MCPClientError(f"导入 GoogleProvider 失败: {e}")
+
+            return GoogleProvider()
 
         raise MCPClientError(f"不支持的 provider: {provider_name}")
 
