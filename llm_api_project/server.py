@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import List, Dict, Optional
 import os
 import sys
 from pathlib import Path
@@ -16,6 +16,7 @@ from docx.oxml.ns import qn
 import pdfkit
 import tempfile
 from datetime import datetime
+import uuid
 
 # 查找并加载.env文件
 env_path = find_dotenv()
@@ -57,11 +58,15 @@ else:
     print(f"成功初始化提供商: {default_provider}")
 
 class ChatRequest(BaseModel):
-    messages: List[Dict[str, str]]
+    session_id: Optional[str] = None  # 客户端的会话ID，可选
+    user_message: Optional[str] = None  # 本轮用户输入
+    context_window: Optional[int] = None  # 携带上下文轮数
+    messages: Optional[List[Dict[str, str]]] = None  # 向后兼容：完整消息列表
     model: str
 
 class ChatResponse(BaseModel):
     response: str
+    session_id: Optional[str] = None
 
 class ProviderSwitchRequest(BaseModel):
     provider_name: str
@@ -84,14 +89,24 @@ async def chat(request: ChatRequest):
     """处理聊天请求"""
     try:
         print(f"收到聊天请求: {request}")
-        result = llm_manager.chat(
-            messages=request.messages,
-            model=request.model
-        )
+        # 根据是否提供 user_message 决定使用会话记忆模式或兼容旧模式
+        if request.user_message is not None:
+            session_id = request.session_id or str(uuid.uuid4())
+            result = llm_manager.chat_with_memory(
+                session_id=session_id,
+                user_message=request.user_message,
+                model=request.model,
+                context_window=request.context_window,
+            )
+        else:
+            result = llm_manager.chat(
+                messages=request.messages or [],
+                model=request.model,
+            )
         print(f"LLM返回结果: {result}")
         
         if isinstance(result, dict) and result.get("status") == "success":
-            return ChatResponse(response=result["response"])
+            return ChatResponse(response=result["response"], session_id=result.get("session_id"))
         elif isinstance(result, dict) and "error" in result:
             print(f"LLM返回错误: {result}")
             return JSONResponse(status_code=500, content=result)

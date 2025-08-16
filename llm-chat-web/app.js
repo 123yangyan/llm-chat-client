@@ -7,10 +7,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const newChatButton = document.querySelector('.new-chat-btn');
     const historyList = document.getElementById('history-list');
     const toolButtons = document.querySelectorAll('.tool-button');
+    const contextRange = document.getElementById('context-range');
+    const contextValueSpan = document.getElementById('context-value');
+
+    // 初始显示上下文轮数
+    contextValueSpan.textContent = contextRange.value;
 
     // 当前聊天的ID
     let currentChatId = generateChatId();
     
+    // 当前会话ID（用于后端上下文记忆）
+    let currentSessionId = localStorage.getItem('currentSessionId') || null;
+
     // 生成聊天ID
     function generateChatId() {
         return 'chat_' + Date.now();
@@ -63,6 +71,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             title: generateChatTitle(messages),
             messages: messages,
             model: model,
+            sessionId: currentSessionId,
             timestamp: timestamp,
             lastUpdated: timestamp
         };
@@ -113,6 +122,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (chat) {
             // 更新当前聊天ID
             currentChatId = chatId;
+            // 恢复 sessionId 以继续上下文
+            currentSessionId = chat.sessionId || null;
+            if (currentSessionId) {
+                localStorage.setItem('currentSessionId', currentSessionId);
+            } else {
+                localStorage.removeItem('currentSessionId');
+            }
             
             // 设置模型
             if (chat.model) {
@@ -380,6 +396,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // 同步滑块显示
+    const updateContextDisplay = () => {
+        contextValueSpan.textContent = contextRange.value;
+    };
+    contextRange.addEventListener('input', updateContextDisplay);
+    contextRange.addEventListener('change', updateContextDisplay);
+    // 初始化调用一次
+    updateContextDisplay();
+
     // 添加消息到界面
     function appendMessage(role, content) {
         // 如果是第一条消息，处理欢迎消息
@@ -439,16 +464,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             contentDiv.className = 'message-content';
             messageDiv.appendChild(contentDiv);
 
+            const contextWindow = parseInt(contextRange.value, 10);
+
             // 发送请求到后端
+            const payload = {
+                session_id: currentSessionId,
+                user_message: message,
+                context_window: contextWindow,
+                model: modelSelect.value
+            };
+
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    messages: [{ role: 'user', content: message }],
-                    model: modelSelect.value
-                })
+                body: JSON.stringify(payload)
             });
 
             // 移除加载状态
@@ -461,6 +492,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const data = await response.json();
             
+            // 更新 session_id（首轮由后端生成）
+            if (!currentSessionId && data.session_id) {
+                currentSessionId = data.session_id;
+                localStorage.setItem('currentSessionId', currentSessionId);
+            }
+
             // 添加消息元素到界面
             messagesContainer.appendChild(messageDiv);
             
@@ -518,6 +555,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // 更新历史记录列表
         updateHistoryList();
+
+        // 当点击新建聊天时，重置 sessionId
+        currentSessionId = null;
+        localStorage.removeItem('currentSessionId');
     });
 
     /**
