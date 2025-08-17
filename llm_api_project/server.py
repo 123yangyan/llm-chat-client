@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import List, Dict, Optional
@@ -47,8 +46,6 @@ else:
     print(f"环境变量：SERVER_HOST={os.getenv('SERVER_HOST')}, SERVER_PORT={os.getenv('SERVER_PORT')}")
 
 import uvicorn
-import webbrowser
-from threading import Timer
 
 app = FastAPI()
 
@@ -218,24 +215,11 @@ async def export_chat(request: ExportRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# 获取前端文件的路径
-FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "llm-chat-web")
-
-# 挂载静态文件
-app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="static")
-
-def open_browser():
-    """在浏览器中打开应用"""
-    webbrowser.open('http://localhost:8000')
+# 前端静态资源不再由后端提供，后端仅暴露 API。
 
 def run_server():
     """启动服务器的函数"""
-    print("启动服务器...")
-    print(f"前端目录: {FRONTEND_DIR}")
-    
-    # 延迟1秒后打开浏览器
-    Timer(1.0, open_browser).start()
-    
+    print("启动 API 服务器（无前端静态文件挂载）...")
     # 启动服务器
     host = _app_settings.SERVER_HOST if _app_settings is not None else os.getenv("SERVER_HOST", "0.0.0.0")
     port = int(_app_settings.SERVER_PORT if _app_settings is not None else os.getenv("SERVER_PORT", "8000"))
