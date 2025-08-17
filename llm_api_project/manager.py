@@ -10,14 +10,23 @@ from mcp_service.config.settings import MCPSettings
 from backend.app.providers.factory import factory as provider_factory  # type: ignore
 
 class LLMManager:
-    def __init__(self):
-        """初始化LLM管理器"""
+    def __init__(self, session_repo=None):
+        """初始化LLM管理器
+
+        Args:
+            session_repo: 会话存储仓库实例，默认使用 InMemory 实现。
+        """
+        # 延迟导入以避免循环
+        if session_repo is None:
+            from backend.app.repositories import session_repo as default_repo  # type: ignore
+            session_repo = default_repo
+
+        self.session_repo = session_repo
+
         self.current_provider = None
         self.providers = {}
         # 使用配置中的 URL 初始化 MCP 客户端
         self.mcp_client = MCPClient(MCPSettings.HOSTED_URL)
-        # 用于保存会话历史，key 为 session_id，value 为消息列表
-        self.sessions: Dict[str, List[Dict[str, str]]] = {}
         # 默认携带的上下文轮数（可通过环境变量 MEMORY_WINDOW 设置）
         try:
             from backend.app.core.config import settings  # type: ignore
@@ -100,7 +109,7 @@ class LLMManager:
             if not model:
                 model = self.current_provider.default_model
                 print(f"未指定模型，使用默认模型: {model}")
-            history = self.sessions.get(session_id, [])
+            history = self.session_repo.get_history(session_id)
             history.append({"role": "user", "content": user_message})
             if context_window is None or context_window <= 0:
                 context_window = self.default_context_window
@@ -112,7 +121,7 @@ class LLMManager:
                 stream=False,
             )
             history.append({"role": "assistant", "content": response_text})
-            self.sessions[session_id] = history
+            self.session_repo.save_history(session_id, history)
             return {
                 "status": "success",
                 "response": response_text,

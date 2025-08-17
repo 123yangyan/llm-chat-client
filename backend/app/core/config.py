@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # LLM 相关
     DEFAULT_PROVIDER: str = "silicon"
 
+    # 会话上下文窗口
+    memory_window: int = 5
+
     # 其他配置占位，可后续扩展
 
     model_config = SettingsConfigDict(
