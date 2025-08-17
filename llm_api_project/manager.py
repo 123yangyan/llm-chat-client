@@ -2,10 +2,12 @@ import os
 from typing import List, Dict, Optional, Union
 from dotenv import load_dotenv
 
-# 导入MCP客户端及配置
+# 现阶段保留 MCPClient 用于 chat，但 provider 创建逻辑交由 ProviderFactory
 from mcp_service.client import MCPClient  # noqa: F401
 from mcp_service.config.settings import MCPSettings
-from .silicon_provider import SiliconProvider
+
+# 引入新的 ProviderFactory
+from backend.app.providers.factory import factory as provider_factory  # type: ignore
 
 class LLMManager:
     def __init__(self):
@@ -31,25 +33,14 @@ class LLMManager:
     def initialize_provider(self, provider_name: str) -> bool:
         """初始化指定的LLM提供商"""
         try:
-            if provider_name == "silicon":
-                if provider_name not in self.providers:
-                    # 使用MCP客户端创建提供商实例
-                    self.providers[provider_name] = self.mcp_client.create_provider("silicon")
-                self.current_provider = self.providers[provider_name]
-                return True
-            elif provider_name == "google":
-                if provider_name not in self.providers:
-                    self.providers[provider_name] = self.mcp_client.create_provider("google")
-                self.current_provider = self.providers[provider_name]
-                return True
-            elif provider_name == "wisdom_gate":
-                if provider_name not in self.providers:
-                    self.providers[provider_name] = self.mcp_client.create_provider("wisdom_gate")
-                self.current_provider = self.providers[provider_name]
-                return True
-            else:
+            provider_instance = provider_factory.get(provider_name)
+            if provider_instance is None:
                 print(f"错误：不支持的提供商 {provider_name}")
                 return False
+
+            self.providers[provider_name] = provider_instance
+            self.current_provider = provider_instance
+            return True
         except Exception as e:
             print(f"初始化提供商失败: {str(e)}")
             return False
