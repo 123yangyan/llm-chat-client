@@ -50,8 +50,13 @@ app.add_middleware(
 
 # 创建LLM管理器实例
 llm_manager = LLMManager()
-# 从环境变量读取默认提供商，如果未设置，则默认为 'silicon'
-default_provider = os.getenv("DEFAULT_PROVIDER", "silicon")
+# 从统一配置读取默认提供商
+try:
+    from backend.app.core.config import settings  # type: ignore
+    default_provider = settings.default_provider
+except Exception:
+    # 回退到旧逻辑，确保兼容
+    default_provider = os.getenv("DEFAULT_PROVIDER", "silicon")
 if not llm_manager.initialize_provider(default_provider):
     print(f"警告：无法初始化默认提供商'{default_provider}'")
 else:

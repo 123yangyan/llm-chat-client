@@ -7,7 +7,15 @@ import uvicorn
 
 def main():
     """CLI 入口"""
-    uvicorn.run("backend.app.main:app", host="0.0.0.0", port=8000, log_level="info")
+    # 从集中配置读取 host / port
+    try:
+        from backend.app.core.config import settings  # type: ignore
+        host = settings.host
+        port = settings.port
+    except Exception:
+        host = "0.0.0.0"
+        port = 8000
+    uvicorn.run("backend.app.main:app", host=host, port=port, log_level="info")
 
 
 if __name__ == "__main__":

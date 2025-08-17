@@ -18,9 +18,14 @@ class LLMManager:
         self.sessions: Dict[str, List[Dict[str, str]]] = {}
         # 默认携带的上下文轮数（可通过环境变量 MEMORY_WINDOW 设置）
         try:
-            self.default_context_window = int(os.getenv("MEMORY_WINDOW", "5"))
-        except ValueError:
-            self.default_context_window = 5
+            from backend.app.core.config import settings  # type: ignore
+            self.default_context_window = settings.memory_window
+        except Exception:
+            # 兼容旧环境变量
+            try:
+                self.default_context_window = int(os.getenv("MEMORY_WINDOW", "5"))
+            except ValueError:
+                self.default_context_window = 5
         print("初始化LLM管理器...")
 
     def initialize_provider(self, provider_name: str) -> bool:
