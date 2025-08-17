@@ -33,11 +33,18 @@ else:
     print("警告: 未找到.env文件")
 
 try:
-    from .manager import LLMManager
+    from llm_api_project.manager import LLMManager  # 改为绝对导入
 except ImportError as e:
     print(f"错误：无法导入LLMManager: {e}")
     print("请确认项目结构是否正确")
     raise
+
+# 添加调试信息
+if _app_settings is not None:
+    print(f"成功加载配置：HOST={_app_settings.SERVER_HOST}, PORT={_app_settings.SERVER_PORT}")
+else:
+    print("警告：未能加载 backend.app.core.config，将使用环境变量")
+    print(f"环境变量：SERVER_HOST={os.getenv('SERVER_HOST')}, SERVER_PORT={os.getenv('SERVER_PORT')}")
 
 import uvicorn
 import webbrowser
@@ -58,7 +65,7 @@ app.add_middleware(
 llm_manager = LLMManager()
 # 读取默认提供商
 if _app_settings is not None:
-    default_provider = _app_settings.default_provider  # type: ignore[attr-defined]
+    default_provider = _app_settings.DEFAULT_PROVIDER  # type: ignore[attr-defined]
 else:
     default_provider = os.getenv("DEFAULT_PROVIDER", "silicon")
 if not llm_manager.initialize_provider(default_provider):
@@ -366,12 +373,9 @@ def run_server():
     Timer(1.0, open_browser).start()
     
     # 启动服务器
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8000,
-        log_level="info"
-    )
+    host = _app_settings.SERVER_HOST if _app_settings is not None else os.getenv("SERVER_HOST", "0.0.0.0")
+    port = int(_app_settings.SERVER_PORT if _app_settings is not None else os.getenv("SERVER_PORT", "8000"))
+    uvicorn.run(app, host=host, port=port)
 
 if __name__ == "__main__":
     run_server() 
