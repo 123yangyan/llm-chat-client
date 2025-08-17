@@ -196,161 +196,25 @@ PDF_OPTIONS = {
 @app.post("/api/export")
 async def export_chat(request: ExportRequest):
     """导出聊天记录"""
+    # 使用新的导出服务
     try:
-        if request.format not in ['word', 'pdf']:
-            raise HTTPException(status_code=400, detail="不支持的导出格式")
+        from backend.app.services import export_service  # 延迟导入避免循环
 
-        # 创建临时文件
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{request.format}') as temp_file:
-            if request.format == 'word':
-                # 创建Word文档
-                doc = Document()
-                
-                # 设置文档基本样式
-                section = doc.sections[0]
-                section.page_width = Cm(21)  # A4纸宽度
-                section.page_height = Cm(29.7)  # A4纸高度
-                section.left_margin = Cm(2.54)
-                section.right_margin = Cm(2.54)
-                section.top_margin = Cm(2.54)
-                section.bottom_margin = Cm(2.54)
-                
-                # 创建并应用标题样式
-                title_style = doc.styles.add_style('CustomTitle', WD_STYLE_TYPE.PARAGRAPH)
-                title_style.font.name = '微软雅黑'
-                title_style._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
-                title_style.font.size = Pt(24)
-                title_style.font.bold = True
-                title_style.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-                title_style.paragraph_format.space_after = Pt(20)
-                
-                # 添加标题
-                title = doc.add_paragraph(request.title, style='CustomTitle')
-                
-                # 添加时间
-                time_paragraph = doc.add_paragraph()
-                time_paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-                time_run = time_paragraph.add_run(f"创建时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                time_run.font.name = '微软雅黑'
-                time_run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
-                time_run.font.size = Pt(10)
-                time_run.font.color.rgb = RGBColor(128, 128, 128)
-                
-                # 添加分隔线
-                separator = doc.add_paragraph()
-                separator.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-                separator_run = separator.add_run('=' * 40)
-                separator_run.font.size = Pt(12)
-                separator_run.font.color.rgb = RGBColor(200, 200, 200)
-                
-                # 创建消息样式
-                message_style = doc.styles.add_style('MessageStyle', WD_STYLE_TYPE.PARAGRAPH)
-                message_style.font.name = '微软雅黑'
-                message_style._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
-                message_style.font.size = Pt(11)
-                message_style.paragraph_format.space_before = Pt(12)
-                message_style.paragraph_format.space_after = Pt(12)
-                message_style.paragraph_format.line_spacing_rule = WD_LINE_SPACING.ONE_POINT_FIVE
-                
-                # 添加消息内容
-                for msg in request.messages:
-                    # 添加角色
-                    role_paragraph = doc.add_paragraph(style='MessageStyle')
-                    role_run = role_paragraph.add_run(f"{msg['role']}：")
-                    role_run.bold = True
-                    role_run.font.color.rgb = RGBColor(0, 0, 0)
-                    
-                    # 添加内容
-                    content_paragraph = doc.add_paragraph(style='MessageStyle')
-                    content_run = content_paragraph.add_run(msg['content'])
-                    content_run.font.color.rgb = RGBColor(51, 51, 51)
-                    
-                    # 添加间隔
-                    doc.add_paragraph(style='MessageStyle')
-                
-                # 保存文档
-                doc.save(temp_file.name)
-                
-            else:  # PDF
-                # 创建HTML内容
-                html_content = f"""
-                <html>
-                <head>
-                    <meta charset="utf-8">
-                    <style>
-                        @font-face {{
-                            font-family: 'Microsoft YaHei';
-                            src: local('Microsoft YaHei');
-                        }}
-                        body {{
-                            font-family: 'Microsoft YaHei', Arial, sans-serif;
-                            margin: 40px;
-                            line-height: 1.6;
-                        }}
-                        .title {{
-                            text-align: center;
-                            font-size: 24px;
-                            margin-bottom: 10px;
-                            font-weight: bold;
-                        }}
-                        .time {{
-                            text-align: center;
-                            font-size: 12px;
-                            color: #666;
-                            margin-bottom: 20px;
-                        }}
-                        .divider {{
-                            border-top: 1px solid #ccc;
-                            margin: 20px 0;
-                        }}
-                        .role {{
-                            font-weight: bold;
-                            margin-top: 15px;
-                            color: #000;
-                        }}
-                        .content {{
-                            margin: 5px 0 15px 20px;
-                            color: #333;
-                        }}
-                    </style>
-                </head>
-                <body>
-                    <div class="title">{request.title}</div>
-                    <div class="time">创建时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
-                    <div class="divider"></div>
-                """
-                
-                for msg in request.messages:
-                    html_content += f"""
-                    <div class="role">{msg['role']}：</div>
-                    <div class="content">{msg['content']}</div>
-                    """
-                
-                html_content += "</body></html>"
-                
-                # 获取wkhtmltopdf路径
-                wkhtmltopdf_path = get_wkhtmltopdf_path()
-                
-                # 配置wkhtmltopdf
-                config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
-                
-                # 使用pdfkit生成PDF
-                pdfkit.from_string(
-                    html_content,
-                    temp_file.name,
-                    options=PDF_OPTIONS,
-                    configuration=config
-                )
-            
-            # 返回文件
-            return FileResponse(
-                temp_file.name,
-                media_type='application/octet-stream',
-                filename=f"{request.title}.{request.format}"
-            )
-            
+        file_path = export_service.generate_export(
+            messages=request.messages,
+            title=request.title,
+            fmt=request.format,
+        )
+
+        return FileResponse(
+            file_path,
+            media_type="application/octet-stream",
+            filename=f"{request.title}.{request.format}",
+        )
     except FileNotFoundError as e:
         raise HTTPException(status_code=500, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
