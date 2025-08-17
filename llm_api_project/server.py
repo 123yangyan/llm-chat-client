@@ -4,9 +4,15 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import List, Dict, Optional
+# 注意：为了与新的统一配置系统兼容，优先尝试从 backend.app.core.config 导入 settings；
+# 若导入失败则回退到环境变量，确保兼容性。
 import os
 import sys
 from pathlib import Path
+try:
+    from backend.app.core.config import settings as _app_settings  # noqa: F401
+except Exception:  # pragma: no cover
+    _app_settings = None
 from dotenv import load_dotenv, find_dotenv
 from docx import Document
 from docx.shared import Pt, RGBColor, Inches, Cm
@@ -50,12 +56,10 @@ app.add_middleware(
 
 # 创建LLM管理器实例
 llm_manager = LLMManager()
-# 从统一配置读取默认提供商
-try:
-    from backend.app.core.config import settings  # type: ignore
-    default_provider = settings.default_provider
-except Exception:
-    # 回退到旧逻辑，确保兼容
+# 读取默认提供商
+if _app_settings is not None:
+    default_provider = _app_settings.default_provider  # type: ignore[attr-defined]
+else:
     default_provider = os.getenv("DEFAULT_PROVIDER", "silicon")
 if not llm_manager.initialize_provider(default_provider):
     print(f"警告：无法初始化默认提供商'{default_provider}'")

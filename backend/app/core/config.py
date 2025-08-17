@@ -1,33 +1,32 @@
-"""核心配置模块，使用 Pydantic BaseSettings 统一读取 .env / 环境变量。"""
-from functools import lru_cache
-from pydantic_settings import BaseSettings
+"""应用统一配置模块（STEP 2）。
+
+使用 pydantic-settings 读取 .env 文件并提供默认值，后续各模块应通过 `from backend.app.core.config import settings` 获取配置。
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent  # 项目根目录
 
 
 class Settings(BaseSettings):
-    # 基础服务配置
+    # Web 服务器
     host: str = "0.0.0.0"
     port: int = 8000
 
-    # 默认 LLM 提供商
+    # LLM 相关
     default_provider: str = "silicon"
 
-    # 上下文窗口默认值
-    memory_window: int = 5
+    # 其他配置占位，可后续扩展
 
-    # 其他可选配置
-    wkhtmltopdf_path: str | None = None
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_file=str(BASE_DIR / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
-@lru_cache()
-def get_settings() -> Settings:
-    """FastAPI 依赖注入友好写法；缓存 Settings 实例。"""
-    return Settings()
-
-
-# 模块级别单例，方便现阶段直接引用
-settings = get_settings() 
+# 单例
+settings = Settings() 
