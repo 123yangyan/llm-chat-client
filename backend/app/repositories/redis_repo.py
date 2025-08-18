@@ -5,24 +5,27 @@ from __future__ import annotations
 import json
 from typing import List, Dict
 
-try:
-    import redis  # type: ignore
-except ModuleNotFoundError:  # 在某些测试环境可用 monkeypatch 伪造
-    redis = None  # type: ignore
+# ---------------------------------------------------------------------------
+# 依赖基础设施层统一创建的 Redis 客户端
+# ---------------------------------------------------------------------------
+
+from backend.infra.redis_client import REDIS  # type: ignore
 
 from .session_base import SessionRepoBase
 
 
 class RedisSessionRepo(SessionRepoBase):
-    """使用 redis-py 简单存储会话历史。
-    每个 session_id 对应一个 json 字符串。
+    """使用共用的 `backend.infra.redis_client.REDIS` 实例存储会话历史。
+    会话数据以 JSON 字符串存储，键为 session_id。
     """
 
-    def __init__(self, redis_url: str):
-        if redis is None:
-            raise RuntimeError("redis 库未安装，无法使用 RedisSessionRepo")
-        # decode_responses=True 以便返回 str
-        self._client = redis.Redis.from_url(redis_url, decode_responses=True)
+    def __init__(self, _redis_url: str | None = None):  # noqa: D401
+        # 为保持向后兼容，保留 redis_url 参数但忽略。
+        self._client = REDIS
+
+    # ---------------------------------------------------------------------
+    # SessionRepo 接口实现
+    # ---------------------------------------------------------------------
 
     def get_history(self, session_id: str) -> List[Dict[str, str]]:
         data = self._client.get(session_id)
