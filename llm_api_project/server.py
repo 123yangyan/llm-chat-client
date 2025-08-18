@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.core.logging_config import logger
+from backend.app.core.error_handler import add_exception_handlers
 
 
 def create_app() -> FastAPI:
@@ -25,6 +26,9 @@ def create_app() -> FastAPI:
 
     app.include_router(chat_router.router)
     app.include_router(export_router.router)
+
+    # 全局异常处理
+    add_exception_handlers(app)
     return app
 
 
