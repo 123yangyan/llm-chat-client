@@ -40,3 +40,7 @@ env/
 # System
 .DS_Store
 Thumbs.db 
+# workspace artifacts
+bin/
+include/
+lib/ 
