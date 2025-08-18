@@ -19,6 +19,9 @@ _alias_map = {
     "backend.app.providers.silicon_provider": "backend.app.providers.impl.silicon_provider",
     "backend.app.providers.google_provider": "backend.app.providers.impl.google_provider",
     "backend.app.providers.wisdom_gate_provider": "backend.app.providers.impl.wisdom_gate_provider",
+    # legacy manager & server
+    "llm_api_project.manager": "backend.app.manager",
+    "llm_api_project.server": "backend.app.server",
 }
 
 # 注册别名
