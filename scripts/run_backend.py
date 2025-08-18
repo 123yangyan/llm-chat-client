@@ -1,3 +1,7 @@
+# 添加父目录到 sys.path 以便绝对导入 backend 包
+import sys, pathlib
+sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
+
 """运行后端 FastAPI 服务器。
 
 从集中配置读取 Settings 中的 SERVER_HOST/SERVER_PORT 并启动。
