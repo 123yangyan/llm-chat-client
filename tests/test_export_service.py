@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 import importlib
 
 # 动态导入 server 并获取 FastAPI app
-server_module = importlib.import_module("llm_api_project.server")
+server_module = importlib.import_module("backend.app.main")
 app = getattr(server_module, "app")
 
 client = TestClient(app)

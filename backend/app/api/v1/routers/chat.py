@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from backend.app.core.logging_config import logger
-from llm_api_project.manager import LLMManager
+from backend.app.manager import LLMManager
 
 router = APIRouter(prefix="/api")
 

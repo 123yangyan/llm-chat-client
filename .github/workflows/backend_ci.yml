@@ -31,7 +31,7 @@ jobs:
 
       - name: Run tests with coverage ≥ 80%
         run: |
-          pytest --cov=backend --cov=llm_api_project --cov-config=.coveragerc --cov-fail-under=50 -q
+          pytest --cov=backend --cov=llm_api_project --cov-config=.coveragerc --cov-fail-under=80 -q
 
   docker-build-push:
     needs: test-lint

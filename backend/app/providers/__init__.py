@@ -9,10 +9,16 @@
 import importlib
 import sys
 
+# legacy → real
 _alias_map = {
-    "llm_api_project.silicon_provider": "llm_api_project.silicon_provider",  # TODO: 后续迁移到 backend.app.providers.silicon_provider
-    "llm_api_project.google_provider": "llm_api_project.google_provider",
-    "llm_api_project.wisdom_gate_provider": "llm_api_project.wisdom_gate_provider",
+    # legacy 路径重定向到新的实现文件
+    "llm_api_project.silicon_provider": "backend.app.providers.impl.silicon_provider",
+    "llm_api_project.google_provider": "backend.app.providers.impl.google_provider",
+    "llm_api_project.wisdom_gate_provider": "backend.app.providers.impl.wisdom_gate_provider",
+    # 新路径到实现文件
+    "backend.app.providers.silicon_provider": "backend.app.providers.impl.silicon_provider",
+    "backend.app.providers.google_provider": "backend.app.providers.impl.google_provider",
+    "backend.app.providers.wisdom_gate_provider": "backend.app.providers.impl.wisdom_gate_provider",
 }
 
 # 注册别名

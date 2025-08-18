@@ -6,7 +6,7 @@ import re
 
 import requests
 
-from .llm_interface import LLMInterface
+from ..base_interface import LLMInterface
 from . import config
 
 

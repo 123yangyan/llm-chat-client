@@ -5,7 +5,7 @@ from typing import List, Dict, AsyncGenerator
 
 import google.generativeai as genai
 
-from .llm_interface import LLMInterface
+from ..base_interface import LLMInterface
 from . import config
 
 

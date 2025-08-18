@@ -4,16 +4,31 @@ from dotenv import load_dotenv
 from datetime import date
 from typing import Dict, Any
 
-# 获取项目根目录
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# ---------------------------------------------------------------------------
+# 获取项目根目录：自当前文件向上递归查找，直到发现 config.yml
+# ---------------------------------------------------------------------------
+
+current_dir = os.path.abspath(__file__)
+while True:
+    current_dir = os.path.dirname(current_dir)
+    candidate = os.path.join(current_dir, "config.yml")
+    if os.path.exists(candidate):
+        BASE_DIR = current_dir
+        break
+    if current_dir == os.path.dirname(current_dir):  # 已到根目录
+        BASE_DIR = os.getcwd()
+        break
 
 # 1. 加载 .env 文件中的环境变量
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 # 2. 加载 yaml 配置文件
 config_path = os.path.join(BASE_DIR, 'config.yml')
-with open(config_path, 'r', encoding='utf-8') as f:
-    _config = yaml.safe_load(f)
+try:
+    with open(config_path, 'r', encoding='utf-8') as f:
+        _config = yaml.safe_load(f)
+except FileNotFoundError:
+    _config = {}
 
 # 3. 将配置项整理成易于访问的变量，可以提供默认值
 

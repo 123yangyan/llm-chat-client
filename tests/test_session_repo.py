@@ -1,7 +1,7 @@
 import pytest
 
 from backend.app.repositories.in_memory import InMemorySessionRepo
-from llm_api_project.manager import LLMManager
+from backend.app.manager import LLMManager
 
 
 def test_session_history_accumulates(monkeypatch):

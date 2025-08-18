@@ -1,7 +1,7 @@
 from openai import OpenAI
 import os
 from typing import Dict, List, Optional, Generator, AsyncGenerator
-from .llm_interface import LLMInterface
+from ..base_interface import LLMInterface
 from . import config  # 导入配置模块
 import requests
 import json

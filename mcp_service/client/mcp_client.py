@@ -56,7 +56,7 @@ class MCPClient:
         if provider_name == "silicon":
             # 延迟导入，避免循环依赖
             try:
-                from llm_api_project.silicon_provider import SiliconProvider
+                from backend.app.providers.impl.silicon_provider import SiliconProvider
             except Exception as e:
                 raise MCPClientError(f"导入 SiliconProvider 失败: {e}")
 
@@ -65,7 +65,7 @@ class MCPClient:
         elif provider_name == "google":
             # 延迟导入，避免循环依赖
             try:
-                from llm_api_project.google_provider import GoogleProvider
+                from backend.app.providers.impl.google_provider import GoogleProvider
             except Exception as e:
                 raise MCPClientError(f"导入 GoogleProvider 失败: {e}")
 
@@ -73,7 +73,7 @@ class MCPClient:
 
         elif provider_name == "wisdom_gate":
             try:
-                from llm_api_project.wisdom_gate_provider import WisdomGateProvider
+                from backend.app.providers.impl.wisdom_gate_provider import WisdomGateProvider
             except Exception as e:
                 raise MCPClientError(f"导入 WisdomGateProvider 失败: {e}")
             return WisdomGateProvider()
