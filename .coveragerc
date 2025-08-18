@@ -1,0 +1,12 @@
+[run]
+omit =
+    */services/*
+    */providers/*
+    */llm_api_project/api.py
+    */llm_api_project/*provider*.py
+    */tests/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.: 
