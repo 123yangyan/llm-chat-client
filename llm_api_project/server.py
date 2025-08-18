@@ -216,6 +216,7 @@ async def export_chat(request: ExportRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 # 前端静态资源不再由后端提供，后端仅暴露 API。
+# app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="static")
 
 def run_server():
     """启动服务器的函数"""

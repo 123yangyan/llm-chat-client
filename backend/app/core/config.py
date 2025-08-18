@@ -29,6 +29,8 @@ class Settings(BaseSettings):
 
     # LLM 相关
     DEFAULT_PROVIDER: str = "silicon"
+    # Redis 连接（可选，用于 SessionRepo）
+    REDIS_URL: str | None = None
 
     # 会话上下文窗口
     memory_window: int = 5
