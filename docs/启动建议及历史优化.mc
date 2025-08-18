@@ -1,0 +1,355 @@
+当前启动方式已改动，直接用下面任意一种：
+
+1. 在虚拟环境中本地启动（开发模式）
+   ```
+   python scripts/run_backend.py
+   ```
+   默认读取 .env 中的 HOST/PORT（示例 127.0.0.1:9000）。
+
+2. 使用 Uvicorn 手动启动
+   ```
+   uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+   ```
+
+3. Docker 方式（推荐与 Redis 一起）
+   ```
+   docker compose up --build
+   ```
+   构建后端镜像并启动 redis + backend，浏览器访问  
+   http://localhost:9000
+
+如果需要停止服务：
+```
+docker compose down          # Docker 模式
+CTRL + C                     # 本地 python/uvicorn
+```
+
+`python run.py` 已被移到 `scripts/run_backend.py`，因此原命令失效。
+
+
+
+
+
+
+下面给出一个“循序渐进、可随时回滚”的重构分解 Roadmap。  
+每一步都能够独立合并到主分支，并提供最小可运行的系统。若资源允许，建议在 Git 分支中按序完成并设立 CI 自动测试，以确保稳定。  
+
+──────────────────────────  
+STEP 0 基线快照  
+• 新建 main 分支 tag：v0_snapshot，保存现状。  
+• 引入预设 CI（lint+单测占位），保证后续步骤可自动验证启动成功：  
+  `pytest -q`, `uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --lifespan on`, `npm run build`（前端若有）。  
+
+──────────────────────────  
+STEP 1 抽离 FastAPI 入口（10min）  
+目标：server.py 只保留路由逻辑，FastAPI 实例转移到新的 backend/app/main.py。  
+1. 新目录 `backend/app`；在其中创建：  
+  ```python
+  # backend/app/main.py
+  from fastapi import FastAPI
+  def get_app() -> FastAPI:
+      from .routers import register_routers
+      app = FastAPI()
+      register_routers(app)
+      return app
+  app = get_app()
+  ```  
+2. 把 server.py 中的 CORS、中间件、路由函数剪切到 `backend/app/routers/__init__.py`，保留 import 路径。  
+3. run.py 改为 `uvicorn backend.app.main:app ...`。  
+验证：CI 启动通过；功能与旧版一致。
+
+──────────────────────────  
+STEP 2 统一配置读取（20–30min）  
+目标：消除多源冲突，使用 Pydantic BaseSettings。  
+1. 新建 `backend/app/core/config.py`：  
+  ```python
+  from pydantic_settings import BaseSettings, SettingsConfigDict
+  class Settings(BaseSettings):
+      server_host: str = "0.0.0.0"
+      server_port: int = 8000
+      default_provider: str = "silicon"
+      class Config: 
+          env_file = ".env"
+  settings = Settings()
+  ```  
+2. 替换 server.py / manager.py / config.py 中的 `os.getenv("DEFAULT_PROVIDER"...` 等调用，改为 `settings.default_provider`。  
+3. 将旧的 llm_api_project/config.py 标记为 deprecated；保留接口但内部调用新 Settings 以避免破坏现有 import。  
+验证：本地跑 `uvicorn`, 环境变量覆盖正常。
+
+──────────────────────────  
+STEP 3 Provider 插件化（≈1h）  
+目标：剥离 LLMManager 的 Provider 创建逻辑。  
+1. 在 `backend/app/providers/base.py` 中保留抽象类（现有 llm_interface.py 可直接搬迁）。  
+2. silicon_provider.py、google_provider.py 等移动到 `backend/app/providers/impl/`，继承 BaseProvider。  
+3. 新建 `ProviderFactory`：根据 settings.default_provider 返回实例。  
+4. LLMManager 只存 Provider 实例 & 会话逻辑，不负责创建。  
+验证：  
+  `POST /api/provider/switch` 能正常切换；`/api/models` 返回无误。
+
+──────────────────────────  
+STEP 4 会话存储抽象（约1h）  
+目标：把内存 dict 抽象为 Repo 层，为后续接入 Redis 做准备。  
+1. 新建 `repositories/session_base.py` + `repositories/in_memory.py`。  
+2. LLMManager 改为依赖注入 SessionRepo（缺省 InMemoryRepo）。  
+3. 在 main.py 使用 FastAPI DEPENDS 提供 Repo 单例。  
+验证：并发两次请求得到相同 session_id，历史正确累积。
+
+──────────────────────────  
+STEP 5 导出功能分层（≈40min）  
+目标：将 PDF/Word 逻辑移出路由，便于单测与复用。  
+1. `services/export_service.py`：包含 `generate_pdf`, `generate_docx` 函数；依赖 Settings 中的 wkhtmltopdf_path。  
+2. 路由 `/api/export` 改为调用 service 并返回 FileResponse。  
+验证：上传同样 payload 结果文件一致。
+
+──────────────────────────  
+STEP 6 拆分前端与静态文件挂载（≈30min）  
+目标：后端只处理 API，不再 mount build 结果。  
+1. 删除 `app.mount("/", StaticFiles(...))`。  
+2. 在 README 说明前端独立启动，如 `npm run dev` 或 nginx build。  
+3. 若仍需一体化，在 docker-compose 用 nginx 服务静态资源。  
+验证：后端仍可健康启动；前端能通过环境变量 VITE_API_URL 调用 API。
+
+──────────────────────────  
+STEP 7 Docker 化 & 多实例可横向扩展（可并行）  
+1. backend/Dockerfile + docker-compose.yml 引入 Redis。  
+2. 新增 `repositories/redis_repo.py`；在 Settings 中添加 redis_url。  
+3. 生产 compose 使用 redis_repo；dev 默认内存。  
+
+──────────────────────────  
+STEP 8 CI / CD 扩展  
+• GitHub Actions：lint → test → build backend image → push docker hub。  
+• 前端另设 workflow。  
+
+──────────────────────────  
+回滚策略  
+1) 每个 STEP 完成后打 tag，如 v1_provider_refactor；任何稳定性问题可 `git checkout` 快速回退。  
+2) 依赖注入＋适配器保证旧接口可继续使用，最大限度减小破坏面。  
+3) CI 自动回归测试作为安全网。  
+
+以上步骤均可按团队节奏逐一实施；如需示例代码 patch 或具体文件搬迁脚本，请继续说明！
+
+
+
+下面给出一个“4 周冲刺”代码优化路线图，每一步都是可独立合并的 PR，并附带衡量指标。按照优先级从易到难、从高收益到低收益推进。
+
+──────────────────────
+WEEK 1　代码可读性 & 注释
+
+STEP 1-A（Day 1-2）  
+目标：核心公共接口补齐 Docstring  
+• 范围：backend/app/**、llm_api_project/** 下暴露给外部调用的类 / 函数  
+• 动作：  
+  – 按 Google-Style 或 reST 编写 Docstring  
+  – CI 中加入 `ruff --select D`（文档规范）  
+• 验收：`ruff` 通过率 100 %
+
+STEP 1-B（Day 3-4）  
+目标：统一日志格式  
+• 引入 `structlog` 或标准 `logging` 配置  
+• LLMManager、Provider、Server 路由统一用 logger  
+• CI 检查不得出现 `print()`  
+
+──────────────────────
+WEEK 2　复杂度 & 结构拆分
+
+STEP 2-A（Day 5-6）  
+目标：拆分 server.py  
+• 新建 `backend/app/api/v1/routers/chat.py`、`export.py`  
+• `app.include_router()` 注册  
+• server.py 只保留 create_app 与 run_server（<150 行）  
+• 验收：radon 复杂度 ≤ B（<10）  
+
+STEP 2-B（Day 7）  
+目标：重构 LLMManager.chat_with_memory  
+• 提取私有方法：  
+  1. `_build_prompt()`  
+  2. `_call_provider()`  
+  3. `_update_history()`  
+• 覆盖率 >= 80 % 的单测  
+
+──────────────────────
+WEEK 3　错误处理 & 重复代码
+
+STEP 3-A（Day 8-9）  
+目标：FastAPI 全局异常处理中间件  
+• 捕获 ValidationError、ProviderError、未知异常  
+• 返回统一 JSON：`{code, message, data}`  
+• 记录堆栈到 logger.error
+
+STEP 3-B（Day 10）  
+目标：导出逻辑去重  
+• 使用 Jinja2 模板 `export.html.j2` 生成 PDF/HTML  
+• Word 样式封装到 `word_styles.py`  
+• 重复字符串 ↓ 70 %
+
+──────────────────────
+WEEK 4　持久化 & 质量门禁
+
+STEP 4-A（Day 11-12）  
+目标：RedisSessionRepo  
+• 实现 `get_history / save_history` 基于 `redis-py`  
+• Settings 增加 `redis_url`；通过依赖注入切换  
+• docker-compose 已含 redis，单元测试用 `fakeredis`
+
+STEP 4-B（Day 13）  
+目标：CI 质量闸门  
+• flake8：`--max-complexity 12`  
+• radon：`radon cc -n B backend llm_api_project`  
+• 单测覆盖率 ≥ 80 %（pytest-cov）  
+• 失败即阻断合并
+
+STEP 4-C（Day 14）  
+目标：文档 & README  
+• 更新架构图、运行方式、API 列表、CI 状态徽章  
+• 在 PR 模板中加入 “是否通过质量门禁” 勾选项
+
+──────────────────────
+持续度量指标
+
+1. Docstring 覆盖率（ruff-D 0 报错）  
+2. radon 复杂度平均 ≤ 8，最大 ≤ 12  
+3. pytest 覆盖率 ≥ 80 %  
+4. Docker 镜像大小 ≤ 300 MB  
+5. 主分支 CI 通过率 100 %
+
+──────────────────────
+团队协作建议
+
+• 每个 STEP 建 Feature 分支，提小粒度 PR；  
+• 使用 GitHub Projects 看板跟踪；  
+• 审核 Checklist：命名、注释、测试、复杂度、日志、异常处理。  
+
+按此节奏执行，整体评分有望从 35 → 70+，屎山异味基本消除。祝优化顺利！
+
+
+
+以下给出一份「渐进式、可回滚」的目录重构方案，目标：
+
+1. 让业务-、基础-、第三方适配层边界清晰  
+2. 合并/折叠零散文件夹，删除无用空包  
+3. 每一步都保持代码可运行，CI 必须通过  
+
+──────────────────────────  
+一、目标结构草案
+
+```
+api-web/                       # 项目根（可改 repo 名）
+├── backend/                   # 纯后端（Python）
+│   ├── app/                   # 业务逻辑包
+│   │   ├── api/               # = 现 api.v1 及后续版本
+│   │   ├── core/              # 公共基础：config、logging、error_handler
+│   │   ├── providers/         # LLM Provider 插件
+│   │   ├── repositories/      # SessionRepo & 未来 DAO
+│   │   ├── services/          # 纯业务 Service（export 等）
+│   │   └── templates/         # Jinja 模板
+│   ├── infra/                 # 基础设施适配层
+│   │   └── redis_client.py
+│   ├── tests/                 # 后端单测
+│   ├── Dockerfile
+│   └── pyproject.toml
+├── frontend/                  # Vite/React 等前端
+│   └── ...
+├── scripts/                   # 工具脚本 run.py、数据迁移等
+├── infra/                     # 根级别 infra（docker-compose、k8s 配置）
+│   └── docker-compose.yml
+└── docs/                      # 架构图 & 说明
+```
+
+说明  
+• backend/app 对外暴露 `create_app()`，其它层不得直接引用 Provider/Repo；  
+• infra 子包用于外部系统（Redis、DB）初始化，backend.app 通过依赖注入使用；  
+• scripts 目录放执行脚本，保证包引用用绝对导入 `from backend.app import ...`。
+
+──────────────────────────  
+二、迁移步骤
+
+STEP 0  创建 `refactor/layout` 分支 & tag 快照  
+– 运行现有 CI，确保基线可通过。  
+
+STEP 1  新建顶层包 skeleton  
+```bash
+mkdir backend frontend scripts infra
+mv backend/app backend/app_tmp   # 临时保存
+mv backend backend_old           # 备份
+mkdir -p backend/app
+```
+
+STEP 2  批量移动文件（示例）  
+```bash
+# 仅示意，可写 bash/powershell 批量脚本
+git mv backend_old/app backend/app
+git mv backend_old/requirements.txt backend/
+git mv backend_old/tests backend/
+git rm -r backend_old
+```
+
+STEP 3  修正 import  
+1. 在 `backend/app/__init__.py` 添加：
+   ```python
+   import importlib, sys, types
+   # 兼容旧引用 llm_api_project.*
+   legacy = importlib.import_module("llm_api_project")
+   sys.modules["llm_api_project"] = legacy
+   ```
+2. 用 `sed` / IDE 全局替换：
+   - `from llm_api_project.` → `from backend.app.`
+   - `backend.app.app` → `backend.app`
+   - 保持 `llm_api_project` 包为空壳，提高渐进兼容性。  
+
+STEP 4  provider / repo 路径修正  
+• `backend/app/providers/__init__.py` 里补救旧路径：  
+  ```python
+  import sys
+  from importlib import import_module
+  sys.modules["llm_api_project.silicon_provider"] = import_module("backend.app.providers.silicon_provider")
+  # 依次放入 google_provider、wisdom_gate_provider
+  ```  
+
+STEP 5  infra 分离  
+1. 新建 `backend/infra/redis_client.py`  
+   ```python
+   import redis, os
+   REDIS = redis.from_url(os.getenv("REDIS_URL","redis://localhost:6379/0"),decode_responses=True)
+   ```  
+2. `redis_repo.py` 仅做简单包装：  
+   ```python
+   from backend.infra.redis_client import REDIS
+   ```  
+
+STEP 6  移动 run.py  
+```bash
+git mv run.py scripts/run_backend.py
+```
+并在文件顶部添加：
+```python
+import sys, pathlib
+sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
+```
+
+STEP 7  更新 CI  
+• workflow 中 `python -m pip install -r backend/requirements.txt`  
+• pytest path 改 `pytest backend/tests`  
+• dockerfile `COPY backend /app`  
+
+STEP 8  本地跑  
+```
+pytest
+flake8 backend --max-complexity 12
+radon cc -n B backend/app
+python scripts/run_backend.py
+```
+全部通过即可合并 PR。  
+
+──────────────────────────  
+三、可回滚策略
+
+1. 每完成一个 STEP → `git tag layout_stepN_ok`  
+2. 若线上异常，`git checkout layout_stepN_ok` 即可恢复  
+3. 旧包名 `llm_api_project` 保留空壳至少两周，让外部脚本有迁移期  
+
+──────────────────────────  
+四、后续建议
+
+1. 完全删除兼容 alias 前，在 CHANGELOG 明确 Breaking Change。  
+2. 最终镜像 `backend/Dockerfile` 只 COPY 必需路径，减少大小。  
+3. 把 Provider 插件做成可 pip install 的独立包（下一个阶段）。

@@ -1,3 +1,8 @@
+const API_BASE = 'http://localhost:9000';
+
+// 设置语言为中文，避免加载其他语言包
+document.documentElement.lang = 'zh-CN';
+
 document.addEventListener('DOMContentLoaded', async () => {
     const messagesContainer = document.getElementById('messages');
     const userInput = document.getElementById('user-input');
@@ -229,7 +234,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 检查API服务器状态
     async function checkAPIServer() {
         try {
-            const response = await fetch('/api/models');
+            const response = await fetch(`${API_BASE}/api/models`);
             if (!response.ok) {
                 throw new Error('API服务器连接失败');
             }
@@ -237,7 +242,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return true;
         } catch (error) {
             console.error('API服务器检查失败:', error);
-            appendMessage('assistant', '⚠️ 警告：无法连接到AI服务器，请确保后端服务已启动（端口8000）');
+            appendMessage('assistant', '⚠️ 警告：无法连接到AI服务器，请确保后端服务已启动（端口9000）');
             return false;
         }
     }
@@ -248,7 +253,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             modelSelect.innerHTML = '<option value="">正在加载模型列表...</option>';
             modelSelect.disabled = true;
 
-            const response = await fetch('/api/models');
+            const response = await fetch(`${API_BASE}/api/models`);
             if (!response.ok) {
                 throw new Error('获取模型列表失败');
             }
@@ -323,7 +328,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const title = `聊天记录_${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
 
             // 发送导出请求
-            const response = await fetch('/api/export', {
+            const response = await fetch(`${API_BASE}/api/export`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -474,7 +479,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 model: modelSelect.value
             };
 
-            const response = await fetch('/api/chat', {
+            const response = await fetch(`${API_BASE}/api/chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -570,7 +575,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             modelSelect.innerHTML = '<option value="">加载中...</option>';
             modelSelect.disabled = true;
 
-            const resp = await fetch('/api/provider/switch', {
+            const resp = await fetch(`${API_BASE}/api/provider/switch`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -633,27 +638,77 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 处理供应商变更事件
     async function handleProviderChange() {
-        const provider = providerSelect.value;
-        await switchProvider(provider);
+        try {
+            const provider = providerSelect.value;
+            // 显示加载状态
+            modelSelect.innerHTML = '<option value="">加载中...</option>';
+            modelSelect.disabled = true;
+
+            // 切换供应商
+            const resp = await fetch(`${API_BASE}/api/provider/switch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider_name: provider })
+            });
+
+            if (!resp.ok) {
+                throw new Error('切换供应商失败');
+            }
+
+            // 重新加载模型列表
+            await loadAvailableModels();
+
+        } catch (error) {
+            console.error('切换供应商失败:', error);
+            appendMessage('assistant', `⚠️ 切换供应商失败: ${error.message}`);
+            modelSelect.innerHTML = '<option value="">加载失败</option>';
+        } finally {
+            modelSelect.disabled = false;
+        }
     }
 
     // 初始化
     async function initialize() {
-        if (await checkAPIServer()) {
-            await switchProvider(providerSelect.value);
-        }
-        // 设置初始欢迎消息
-        if (messagesContainer.children.length === 0) {
-            messagesContainer.innerHTML = `
-                <div class="message assistant welcome-message">
-                    <div class="message-content">
-                        <p>你好主人，妲己已准备就绪！</p>
+        try {
+            // 1. 检查API服务器并加载模型列表（只调用一次）
+            if (await checkAPIServer()) {
+                await loadAvailableModels();
+            }
+
+            // 2. 设置初始欢迎消息
+            if (messagesContainer.children.length === 0) {
+                messagesContainer.innerHTML = `
+                    <div class="message assistant welcome-message">
+                        <div class="message-content">
+                            <p>你好主人，妲己已准备就绪！</p>
+                        </div>
                     </div>
-                </div>
-            `;
+                `;
+            }
+
+            // 3. 加载历史记录列表
+            updateHistoryList();
+
+            // 4. 根据当前选择的供应商预设模型
+            const provider = providerSelect.value;
+            let preferredModel = null;
+            if (provider === 'google') {
+                preferredModel = 'gemini-2.5-flash';
+            } else if (provider === 'silicon') {
+                preferredModel = 'Qwen/Qwen3-32B';
+            } else if (provider === 'wisdom_gate') {
+                preferredModel = 'gemini-2.5-flash';
+            }
+            if (preferredModel) {
+                const modelOption = Array.from(modelSelect.options).find(opt => opt.value === preferredModel);
+                if (modelOption) {
+                    modelSelect.value = preferredModel;
+                }
+            }
+        } catch (error) {
+            console.error('初始化失败:', error);
+            appendMessage('assistant', `⚠️ 初始化失败: ${error.message}`);
         }
-        // 加载历史记录列表
-        updateHistoryList();
     }
 
     initialize();
