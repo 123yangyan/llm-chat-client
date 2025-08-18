@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+# 新增统一日志
+from backend.app.core.logging_config import logger
 
 # 修正：从当前文件位置向上查找，直到找到包含 .env 的目录
 current_dir = Path(__file__).resolve().parent
@@ -20,7 +22,7 @@ else:
     BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 env_path = BASE_DIR / ".env"
-print(f"尝试加载配置文件: {env_path} (存在: {env_path.exists()})")
+logger.info("尝试加载配置文件: %s (存在: %s)", env_path, env_path.exists())
 
 class Settings(BaseSettings):
     # Web 服务器
@@ -46,4 +48,9 @@ class Settings(BaseSettings):
 
 # 单例
 settings = Settings()
-print(f"配置加载结果: HOST={settings.SERVER_HOST}, PORT={settings.SERVER_PORT}, PROVIDER={settings.DEFAULT_PROVIDER}") 
+logger.info(
+    "配置加载结果: HOST=%s, PORT=%s, PROVIDER=%s",
+    settings.SERVER_HOST,
+    settings.SERVER_PORT,
+    settings.DEFAULT_PROVIDER,
+) 

@@ -9,6 +9,9 @@ from mcp_service.config.settings import MCPSettings
 # 引入新的 ProviderFactory
 from backend.app.providers.factory import factory as provider_factory  # type: ignore
 
+# 统一日志
+from backend.app.core.logging_config import logger
+
 class LLMManager:
     def __init__(self, session_repo=None):
         """初始化LLM管理器
@@ -37,33 +40,33 @@ class LLMManager:
                 self.default_context_window = int(os.getenv("MEMORY_WINDOW", "5"))
             except ValueError:
                 self.default_context_window = 5
-        print("初始化LLM管理器...")
+        logger.info("初始化LLM管理器...")
 
     def initialize_provider(self, provider_name: str) -> bool:
         """初始化指定的LLM提供商"""
         try:
             provider_instance = provider_factory.get(provider_name)
             if provider_instance is None:
-                print(f"错误：不支持的提供商 {provider_name}")
+                logger.error("错误：不支持的提供商 %s", provider_name)
                 return False
 
             self.providers[provider_name] = provider_instance
             self.current_provider = provider_instance
             return True
         except Exception as e:
-            print(f"初始化提供商失败: {str(e)}")
+            logger.exception("初始化提供商失败: %s", e)
             return False
 
     def get_available_models(self) -> Dict[str, str]:
         """获取当前提供商可用的模型列表"""
         try:
             if not self.current_provider:
-                print("错误：未初始化提供商")
+                logger.error("错误：未初始化提供商")
                 return {}
             # 通过MCP客户端获取模型列表
             return self.mcp_client.get_available_models(self.current_provider)
         except Exception as e:
-            print(f"获取模型列表失败: {str(e)}")
+            logger.exception("获取模型列表失败: %s", e)
             return {}
 
     def chat(self, messages: List[Dict[str, str]], model: str) -> Dict[str, Union[str, List[Dict[str, str]]]]:
@@ -74,7 +77,7 @@ class LLMManager:
 
             if not model:
                 model = self.current_provider.default_model
-                print(f"未指定模型，使用默认模型: {model}")
+                logger.info("未指定模型，使用默认模型: %s", model)
 
             # 使用MCP客户端发送聊天请求
             response = self.mcp_client.chat(
@@ -92,7 +95,7 @@ class LLMManager:
 
         except Exception as e:
             error_msg = str(e)
-            print(f"聊天请求失败: {error_msg}")
+            logger.exception("聊天请求失败: %s", error_msg)
             return {"status": "error", "error": error_msg} 
 
     def chat_with_memory(
@@ -108,7 +111,7 @@ class LLMManager:
                 return {"status": "error", "error": "未初始化提供商"}
             if not model:
                 model = self.current_provider.default_model
-                print(f"未指定模型，使用默认模型: {model}")
+                logger.info("未指定模型，使用默认模型: %s", model)
             history = self.session_repo.get_history(session_id)
             history.append({"role": "user", "content": user_message})
             if context_window is None or context_window <= 0:

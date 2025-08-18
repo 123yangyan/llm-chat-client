@@ -4,3 +4,23 @@ version = "0.1.0"
 
 [tool.setuptools.packages.find]
 where = ["."] 
+
+[tool.ruff]
+line-length = 120
+# 仅关注 print() 禁用（T201）与核心模块的 Docstring 规范（D*）
+select = ["D", "T201"]
+
+# 排除第三方依赖与示例脚本，避免 CI 误报
+exclude = [
+    "venv",
+    ".venv",
+    "site-packages",
+    "mcp_service",
+    "examples",
+    "main.py",
+]
+
+# 对测试文件和 CLI 启动脚本暂时放宽 Docstring 要求
+[tool.ruff.per-file-ignores]
+"tests/*" = ["D"]
+"run.py" = ["D"] 

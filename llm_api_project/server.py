@@ -8,6 +8,7 @@ from typing import List, Dict, Optional
 import os
 import sys
 from pathlib import Path
+from backend.app.core.logging_config import logger
 try:
     from backend.app.core.config import settings as _app_settings  # noqa: F401
 except Exception:  # pragma: no cover
@@ -26,24 +27,24 @@ import uuid
 # 查找并加载.env文件
 env_path = find_dotenv()
 if env_path:
-    print(f"找到.env文件: {env_path}")
+    logger.info("找到.env文件: %s", env_path)
     load_dotenv(env_path)
 else:
-    print("警告: 未找到.env文件")
+    logger.warning("未找到.env文件")
 
 try:
     from llm_api_project.manager import LLMManager  # 改为绝对导入
 except ImportError as e:
-    print(f"错误：无法导入LLMManager: {e}")
-    print("请确认项目结构是否正确")
+    logger.exception("无法导入LLMManager: %s", e)
+    logger.error("请确认项目结构是否正确")
     raise
 
 # 添加调试信息
 if _app_settings is not None:
-    print(f"成功加载配置：HOST={_app_settings.SERVER_HOST}, PORT={_app_settings.SERVER_PORT}")
+    logger.info("成功加载配置：HOST=%s, PORT=%s", _app_settings.SERVER_HOST, _app_settings.SERVER_PORT)
 else:
-    print("警告：未能加载 backend.app.core.config，将使用环境变量")
-    print(f"环境变量：SERVER_HOST={os.getenv('SERVER_HOST')}, SERVER_PORT={os.getenv('SERVER_PORT')}")
+    logger.warning("未能加载 backend.app.core.config，将使用环境变量")
+    logger.warning("环境变量：SERVER_HOST=%s, SERVER_PORT=%s", os.getenv('SERVER_HOST'), os.getenv('SERVER_PORT'))
 
 import uvicorn
 
@@ -66,9 +67,9 @@ if _app_settings is not None:
 else:
     default_provider = os.getenv("DEFAULT_PROVIDER", "silicon")
 if not llm_manager.initialize_provider(default_provider):
-    print(f"警告：无法初始化默认提供商'{default_provider}'")
+    logger.warning("无法初始化默认提供商 '%s'", default_provider)
 else:
-    print(f"成功初始化提供商: {default_provider}")
+    logger.info("成功初始化提供商: %s", default_provider)
 
 class ChatRequest(BaseModel):
     session_id: Optional[str] = None  # 客户端的会话ID，可选
@@ -101,7 +102,7 @@ async def switch_provider(request: ProviderSwitchRequest):
 async def chat(request: ChatRequest):
     """处理聊天请求"""
     try:
-        print(f"收到聊天请求: {request}")
+        logger.info("收到聊天请求: %s", request)
         # 根据是否提供 user_message 决定使用会话记忆模式或兼容旧模式
         if request.user_message is not None:
             session_id = request.session_id or str(uuid.uuid4())
@@ -116,24 +117,23 @@ async def chat(request: ChatRequest):
                 messages=request.messages or [],
                 model=request.model,
             )
-        print(f"LLM返回结果: {result}")
+        logger.debug("LLM返回结果: %s", result)
         
         if isinstance(result, dict) and result.get("status") == "success":
             return ChatResponse(response=result["response"], session_id=result.get("session_id"))
         elif isinstance(result, dict) and "error" in result:
-            print(f"LLM返回错误: {result}")
+            logger.error("LLM返回错误: %s", result)
             return JSONResponse(status_code=500, content=result)
         else:
-            print(f"未知的响应格式: {result}")
+            logger.error("未知的响应格式: %s", result)
             return JSONResponse(
                 status_code=500,
                 content={"status": "error", "error": "未知的响应格式"}
             )
     except Exception as e:
         import traceback
-        print(f"发生异常: {str(e)}")
-        print("详细错误信息:")
-        print(traceback.format_exc())
+        logger.exception("发生异常: %s", e)
+        logger.error("详细错误信息:\n%s", traceback.format_exc())
         return JSONResponse(
             status_code=500,
             content={"status": "error", "error": str(e)}
@@ -220,7 +220,7 @@ async def export_chat(request: ExportRequest):
 
 def run_server():
     """启动服务器的函数"""
-    print("启动 API 服务器（无前端静态文件挂载）...")
+    logger.info("启动 API 服务器（无前端静态文件挂载）...")
     # 启动服务器
     host = _app_settings.SERVER_HOST if _app_settings is not None else os.getenv("SERVER_HOST", "0.0.0.0")
     port = int(_app_settings.SERVER_PORT if _app_settings is not None else os.getenv("SERVER_PORT", "8000"))
