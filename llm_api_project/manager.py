@@ -98,6 +98,27 @@ class LLMManager:
             logger.exception("聊天请求失败: %s", error_msg)
             return {"status": "error", "error": error_msg} 
 
+    # ------------------------------------------------------------------
+    # 私有辅助方法（STEP 2-B）
+    # ------------------------------------------------------------------
+
+    def _build_prompt(self, history: List[Dict[str, str]], context_window: int) -> List[Dict[str, str]]:
+        """构造模型输入消息列表。"""
+        return history[-context_window * 2 :]
+
+    def _call_provider(self, messages: List[Dict[str, str]], model: str) -> str:
+        """调用底层 provider 获取回复。"""
+        return self.mcp_client.chat(
+            provider=self.current_provider,
+            messages=messages,
+            model=model,
+            stream=False,
+        )
+
+    def _update_history(self, session_id: str, history: List[Dict[str, str]]) -> None:
+        """把最新对话历史写入仓库。"""
+        self.session_repo.save_history(session_id, history)
+
     def chat_with_memory(
         self,
         session_id: str,
@@ -116,15 +137,12 @@ class LLMManager:
             history.append({"role": "user", "content": user_message})
             if context_window is None or context_window <= 0:
                 context_window = self.default_context_window
-            prompt_messages = history[-context_window * 2:]
-            response_text = self.mcp_client.chat(
-                provider=self.current_provider,
-                messages=prompt_messages,
-                model=model,
-                stream=False,
-            )
+
+            prompt_messages = self._build_prompt(history, context_window)
+            response_text = self._call_provider(prompt_messages, model)
+
             history.append({"role": "assistant", "content": response_text})
-            self.session_repo.save_history(session_id, history)
+            self._update_history(session_id, history)
             return {
                 "status": "success",
                 "response": response_text,
