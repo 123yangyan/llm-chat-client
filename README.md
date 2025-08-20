@@ -10,6 +10,18 @@
 - 支持多个模型选择
 - 可动态切换提供商
 
+## 系统兼容与前提条件
+
+- **操作系统**：Windows 10/11、macOS 12+、Ubuntu 20.04+/Debian 11+ 等现代 64-bit Linux 发行版。
+- **Python**：3.11 及以上（Dockerfile 基于 `python:3.11-slim`）。
+- **Git**：2.30+。
+- **Node.js / npm**：18+（仅在开发或构建前端时需要）。
+- **Docker & Docker Compose**：24+ / Compose v2（可选，用于容器化部署）。
+- **Redis**：7+（可选，用于持久化会话）。
+- **wkhtmltopdf**：0.12.6+（可选，`pdfkit` 依赖此工具用于 PDF 导出）。
+
+如仅体验后端接口，可跳过 Node.js 与 Redis；使用 Docker Compose 将自动获得 Python 与 Redis 运行环境。
+
 ## 安装说明
 
 1. 克隆仓库：
@@ -18,7 +30,7 @@ git clone [your-repository-url]
 cd [repository-name]
 ```
 
-2. 创建并激活虚拟环境：
+2. 创建并激活 **Python 3.11** 虚拟环境：
 ```bash
 python -m venv venv
 # Windows
@@ -112,6 +124,21 @@ python scripts/run_backend.py
 ├── requirements.txt      # Python 依赖
 └── pyproject.toml        # 项目配置
 ```
+
+## 质量保证与开发工具
+
+- **单元测试**：`pytest`，运行 `pytest -q`。
+- **覆盖率**：`pytest --cov`。
+- **静态检查**：`flake8` / `ruff`（配置见 `.flake8` 与 `pyproject.toml`）。
+- **代码格式化**：`ruff format`。
+
+快速开始开发（可选）：
+```bash
+pip install -r requirements.txt
+pip install ruff flake8 pytest coverage
+```
+
+提交 PR 前，请确保所有检查通过并附带必要的单元测试。
 
 ## 开发说明
 
