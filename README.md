@@ -34,20 +34,37 @@ pip install -e .
 ```
 
 4. 配置环境变量：
-   - 复制 `.env.example` 到 `.env`
-   - 在 `.env` 文件中填入您的API密钥
+   - 在仓库根目录创建 `.env` 文件，并填入以下键值（示例）：
+```env
+# LLM API Keys
+SILICON_API_KEY=your_silicon_key
+GOOGLE_API_KEY=your_google_key
+
+# Server
+SERVER_HOST=0.0.0.0
+SERVER_PORT=8000
+
+# Redis (可选)
+REDIS_URL=redis://localhost:6379/0
+```
 
 ## 使用方法
 
-1. 启动服务器：
+1. 启动服务器（仅后端 FastAPI）：
 ```bash
-cd llm-chat-web
-python server.py
+# 开发模式（推荐）
+uvicorn backend.app.main:app --reload
+
+# 或使用提供的脚本
+python scripts/run_backend.py
 ```
 
-2. 访问Web界面：
-   - 打开浏览器访问 `http://localhost:8000`
-   - 服务器会自动打开默认浏览器
+2. 访问接口文档：
+   - 打开浏览器访问 `http://localhost:8000/docs` (Swagger UI)
+
+3. 启动并访问前端（可选）：
+   - 若 `frontend` 目录包含前端源码，可执行 `npm install && npm run dev`，然后访问 `http://localhost:5173`
+   - 如果仅需调用 API，可跳过此步骤
 
 ## API文档
 
@@ -87,20 +104,22 @@ python server.py
 
 ```
 📁 项目根目录
-├── 📁 llm-api-project/     # LLM接口实现
-├── 📁 llm-chat-web/        # Web服务器和前端
-├── .env.example            # 环境变量示例
-├── requirements.txt        # Python依赖
-└── pyproject.toml         # 项目配置
+├── backend/              # FastAPI 后端源代码
+├── frontend/             # Vite + Vue3 前端（如需开发，手动解压 frontend.zip）
+├── mcp_service/          # 辅助脚本与服务
+├── scripts/              # 本地运行辅助脚本
+├── docker-compose.yml    # 一键启动 Redis + Backend
+├── requirements.txt      # Python 依赖
+└── pyproject.toml        # 项目配置
 ```
 
 ## 开发说明
 
 ### 添加新的提供商
 
-1. 在 `llm-api-project` 目录下创建新的提供商类
-2. 实现 `LLMInterface` 接口
-3. 在 `LLMManager` 中注册新的提供商
+1. 在 `backend/app/providers/impl` 目录下创建新的 Provider 类
+2. 继承 `backend.app.providers.base_interface.LLMInterface` 并实现所需方法
+3. 在 `backend.app.providers.factory.ProviderFactory` 中注册新的提供商
 
 ### 贡献指南
 
